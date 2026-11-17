@@ -25,7 +25,7 @@ export class CreateGuardianExceptionInput {
   @Field()
   reason!: string;
 
-  @Field({ nullable: true })
+  @Field(() => Date, { nullable: true })
   expiresAt?: Date;
 }
 
@@ -40,6 +40,6 @@ export class UpdateGuardianExceptionInput {
   @Field({ nullable: true })
   reason?: string;
 
-  @Field({ nullable: true })
+  @Field(() => Date, { nullable: true })
   expiresAt?: Date;
 }

@@ -493,6 +493,27 @@ input CreateFeeStructureInput {
   termId: String
 }
 
+input CreateGuardianExceptionInput {
+  action: GuardianAction!
+  effect: GuardianEffect!
+  expiresAt: DateTime
+  guardianId: String
+  reason: String!
+  resource: GuardianResource!
+  studentId: String!
+}
+
+input CreateGuardianPolicyInput {
+  condition: JSONObject
+  description: String
+  enabled: Boolean
+  name: String!
+  priority: Float
+  rules: [GuardianPolicyRuleInput!]!
+  scope: GuardianPolicyScope!
+  studentId: String
+}
+
 input CreateNonTeachingSlotInput {
   dayOfWeek: Int
   endTime: String
@@ -1264,6 +1285,144 @@ enum GradingSystem {
   WAEC
 }
 
+type GuardianAccessAuditLog {
+  action: GuardianAuditAction!
+  actorId: String!
+  afterState: JSONObject
+  beforeState: JSONObject
+  createdAt: DateTime!
+  entityId: String
+  entityType: String!
+  id: ID!
+  schoolId: String!
+  updatedAt: DateTime!
+}
+
+type GuardianAccessException {
+  action: GuardianAction!
+  createdAt: DateTime!
+  createdById: String!
+  effect: GuardianEffect!
+  expiresAt: DateTime
+  guardianId: String
+  id: ID!
+  reason: String!
+  resource: GuardianResource!
+  schoolId: String!
+  studentId: String!
+  updatedAt: DateTime!
+  updatedById: String!
+}
+
+type GuardianAccessPolicy {
+  condition: JSONObject
+  createdAt: DateTime!
+  createdById: String!
+  description: String
+  enabled: Boolean!
+  id: ID!
+  name: String!
+  priority: Float!
+  rules: [GuardianAccessPolicyRule!]!
+  schoolId: String!
+  scope: GuardianPolicyScope!
+  studentId: String
+  updatedAt: DateTime!
+  updatedById: String!
+}
+
+type GuardianAccessPolicyRule {
+  action: GuardianAction!
+  createdAt: DateTime!
+  effect: GuardianEffect!
+  id: ID!
+  policyId: String!
+  resource: GuardianResource!
+  updatedAt: DateTime!
+}
+
+type GuardianAccessSnapshotType {
+  generatedAt: DateTime!
+  permissions: [GuardianPermissionDecisionType!]!
+  schoolId: String!
+  studentId: String!
+  studentName: String!
+}
+
+enum GuardianAction {
+  SUBMIT
+  VIEW
+}
+
+enum GuardianAuditAction {
+  EXCEPTION_CREATED
+  EXCEPTION_REMOVED
+  EXCEPTION_UPDATED
+  POLICY_CREATED
+  POLICY_DELETED
+  POLICY_DISABLED
+  POLICY_ENABLED
+  POLICY_UPDATED
+  RULE_CREATED
+  RULE_DELETED
+  RULE_UPDATED
+}
+
+type GuardianConditionDetailType {
+  field: GuardianConditionField
+  matched: Boolean!
+  operator: GuardianConditionOperator
+  reason: String
+  value: JSONObject
+}
+
+type GuardianConditionEvaluationType {
+  details: [GuardianConditionDetailType!]!
+  matched: Boolean!
+  unavailableReasons: [String!]!
+}
+
+enum GuardianConditionField {
+  FEE_PAYMENT_PERCENTAGE
+  OUTSTANDING_BALANCE
+  STUDENT_CLASS
+  STUDENT_STATUS
+}
+
+enum GuardianConditionOperator {
+  EQUALS
+  GREATER_THAN
+  GREATER_THAN_OR_EQUAL
+  IN
+  LESS_THAN
+  LESS_THAN_OR_EQUAL
+  NOT_EQUALS
+  NOT_IN
+}
+
+enum GuardianDecisionSource {
+  DEFAULT_DENY
+  DYNAMIC_SEGMENT
+  EXCEPTION
+  SCHOOL_DEFAULT
+  SECURITY_INVARIANT
+  STUDENT_OVERRIDE
+}
+
+type GuardianDecisionType {
+  allowed: Boolean!
+  evaluatedAt: DateTime!
+  policyId: String
+  reason: String!
+  ruleId: String
+  sourceType: GuardianDecisionSource!
+}
+
+enum GuardianEffect {
+  ALLOW
+  DENY
+}
+
 input GuardianInput {
   address: String
   email: String
@@ -1273,11 +1432,64 @@ input GuardianInput {
   relationship: String!
 }
 
+type GuardianPermissionDecisionType {
+  action: GuardianAction!
+  allowed: Boolean!
+  evaluatedAt: DateTime!
+  policyId: String
+  reason: String!
+  resource: GuardianResource!
+  ruleId: String
+  sourceType: GuardianDecisionSource!
+}
+
+input GuardianPolicyRuleInput {
+  action: GuardianAction!
+  effect: GuardianEffect!
+  resource: GuardianResource!
+}
+
+enum GuardianPolicyScope {
+  DYNAMIC_SEGMENT
+  SCHOOL_DEFAULT
+  STUDENT_OVERRIDE
+}
+
+type GuardianPolicyTraceType {
+  conditionEvaluation: GuardianConditionEvaluationType
+  matched: Boolean!
+  policyId: String!
+  policyName: String!
+  priority: Float!
+  reason: String!
+  ruleEffect: GuardianEffect
+  scope: GuardianPolicyScope!
+}
+
+type GuardianPreviewType {
+  decision: GuardianDecisionType!
+  metrics: JSONObject!
+  trace: [GuardianPolicyTraceType!]!
+}
+
 enum GuardianRelationship {
   FATHER
   GUARDIAN
   MOTHER
   OTHER
+}
+
+enum GuardianResource {
+  ATTENDANCE
+  CHILD_PROFILE
+  COMMUNICATION
+  FEES
+  INVOICES
+  PAYMENT_HISTORY
+  PAYMENT_SUBMISSION
+  RECEIPTS
+  RESULTS
+  TIMETABLE
 }
 
 """Card orientation (Portrait or Landscape)"""
@@ -1434,6 +1646,9 @@ type Mutation {
   createExpenseVendor(input: CreateExpenseVendorInput!): ExpenseVendor!
   createFeeCategory(input: CreateFeeCategoryInput!): FeeCategory!
   createFeeStructure(input: CreateFeeStructureInput!): FeeStructure!
+  createGuardianAccessException(input: CreateGuardianExceptionInput!, schoolId: String): GuardianAccessException!
+  createGuardianAccessPolicy(input: CreateGuardianPolicyInput!, schoolId: String): GuardianAccessPolicy!
+  createGuardianAccessPolicyRule(action: GuardianAction!, effect: GuardianEffect!, policyId: String!, resource: GuardianResource!): GuardianAccessPolicyRule!
   createNonTeachingSlot(input: CreateNonTeachingSlotInput!): NonTeachingSlot!
   createPeriod(input: CreatePeriodInput!): Period!
   createPermissionGroup(input: CreatePermissionGroupInput!): PermissionGroup!
@@ -1454,6 +1669,9 @@ type Mutation {
   deactivateUser(id: String!): User!
   deleteAnnouncement(id: String!): Boolean!
   deleteExpenseCategory(id: ID!): ExpenseCategory!
+  deleteGuardianAccessException(id: String!): Boolean!
+  deleteGuardianAccessPolicy(id: String!): Boolean!
+  deleteGuardianAccessPolicyRule(id: String!): Boolean!
   deleteNonTeachingSlot(id: String!): Boolean!
   deletePeriod(deleteGroup: Boolean! = true, id: String!): Boolean!
   deletePermissionGroup(groupId: String!, schoolId: String): Boolean!
@@ -1518,6 +1736,7 @@ type Mutation {
   saveTeacherRemark(remark: String!, subjectScoreId: String!): SubjectScore!
   setDefaultReceiptTemplate(id: String!): ReceiptTemplate
   setExpenseBudget(input: SetExpenseBudgetInput!): ExpenseBudget!
+  setGuardianAccessPolicyEnabled(enabled: Boolean!, id: String!): GuardianAccessPolicy!
   setPermissionGroupPermissions(input: SetPermissionGroupPermissionsInput!, schoolId: String): [PermissionGroupPermission!]!
   setUserPermission(action: PermissionAction, effect: PermissionEffect, input: SetUserPermissionInput, resource: AppResource, schoolId: String, userId: String): UserPermission!
   singleUpload(file: Upload!, folder: String!): UploadResult!
@@ -1538,6 +1757,9 @@ type Mutation {
   updateExpoPushToken(token: String!): Boolean!
   updateFeeCategory(id: String!, input: UpdateFeeCategoryInput!): FeeCategory!
   updateFeeStructureAmount(amount: Int!, id: String!): FeeStructure!
+  updateGuardianAccessException(input: UpdateGuardianExceptionInput!): GuardianAccessException!
+  updateGuardianAccessPolicy(input: UpdateGuardianPolicyInput!): GuardianAccessPolicy!
+  updateGuardianAccessPolicyRule(input: UpdateGuardianPolicyRuleInput!): GuardianAccessPolicyRule!
   updateMyAdminThemePreference(preference: String!): User!
   updateNonTeachingSlot(input: UpdateNonTeachingSlotInput!): NonTeachingSlot!
   updatePeriod(input: UpdatePeriodInput!): Period!
@@ -1981,6 +2203,11 @@ type Query {
   feeStructure(id: String!): FeeStructure
   feeStructures(classId: String, sessionId: String!, termId: String): [FeeStructure!]!
   feeStudentLookup(classId: String): [FeeStudentLookup!]!
+  guardianAccessAuditLogs(schoolId: String): [GuardianAccessAuditLog!]!
+  guardianAccessExceptions(schoolId: String): [GuardianAccessException!]!
+  guardianAccessExceptionsForStudent(schoolId: String, studentId: String!): [GuardianAccessException!]!
+  guardianAccessPolicies(schoolId: String): [GuardianAccessPolicy!]!
+  guardianAccessPolicy(id: String!): GuardianAccessPolicy!
   guardianStudents(guardianId: String!): [Student!]!
 
   """Get an ID card template by ID or key"""
@@ -1998,6 +2225,7 @@ type Query {
   myChildrenTimetables(termId: String): [ChildTimetableResult!]!
   myClasses: [ClassEntity!]!
   myEffectivePermissions: [EffectivePermission!]!
+  myGuardianAccess: [GuardianAccessSnapshotType!]!
   myPaymentSubmissions: [PaymentSubmissionBatch!]!
   myPaymentSubmissionsPage(limit: Int! = 50, page: Int! = 1): PaginatedPaymentSubmissionBatch!
   myPermissions: [RolePermission!]!
@@ -2017,6 +2245,7 @@ type Query {
   pettyCashAccount: PettyCashAccount!
   pettyCashTransactions(limit: Int = 50): [PettyCashTransaction!]!
   platformStats: PlatformStats!
+  previewGuardianAccess(action: GuardianAction!, guardianId: String!, resource: GuardianResource!, schoolId: String, studentId: String!): GuardianPreviewType!
   previewReportCardHtml(config: JSONObject, templateId: String): String!
   previewSchoolDaySchedule(input: PreviewSchoolDayScheduleInput!): SchoolDaySchedulePreviewResult!
   receiptTemplates: [ReceiptTemplate!]!
@@ -3046,6 +3275,31 @@ input UpdateFeeCategoryInput {
   isActive: Boolean
   name: String
   recurrence: FeeRecurrence
+}
+
+input UpdateGuardianExceptionInput {
+  effect: GuardianEffect
+  expiresAt: DateTime
+  id: String!
+  reason: String
+}
+
+input UpdateGuardianPolicyInput {
+  clearCondition: Boolean
+  condition: JSONObject
+  description: String
+  enabled: Boolean
+  id: String!
+  name: String
+  priority: Float
+  rules: [GuardianPolicyRuleInput!]
+  scope: GuardianPolicyScope
+  studentId: String
+}
+
+input UpdateGuardianPolicyRuleInput {
+  effect: GuardianEffect
+  id: String!
 }
 
 input UpdateNonTeachingSlotInput {

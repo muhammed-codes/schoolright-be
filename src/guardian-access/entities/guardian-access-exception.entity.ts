@@ -20,7 +20,7 @@ export class GuardianAccessException extends BaseEntity {
   @Column({ type: 'uuid' })
   studentId!: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   @Column({ type: 'uuid', nullable: true })
   guardianId?: string | null;
 
@@ -40,7 +40,7 @@ export class GuardianAccessException extends BaseEntity {
   @Column({ type: 'text' })
   reason!: string;
 
-  @Field({ nullable: true })
+  @Field(() => Date, { nullable: true })
   @Column({ type: 'timestamptz', nullable: true })
   expiresAt?: Date | null;
 

@@ -29,7 +29,7 @@ export class GuardianAccessAuditLog extends BaseEntity {
   @Column()
   entityType!: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   @Column({ type: 'uuid', nullable: true })
   entityId?: string | null;
 

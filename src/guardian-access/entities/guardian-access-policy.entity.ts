@@ -1,4 +1,4 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { Field, ObjectType } from '@nestjs/graphql';
 import {
   Column,
   Entity,
@@ -27,7 +27,7 @@ export class GuardianAccessPolicy extends BaseEntity {
   @Column()
   name!: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   @Column({ type: 'text', nullable: true })
   description?: string | null;
 
@@ -47,7 +47,7 @@ export class GuardianAccessPolicy extends BaseEntity {
   @Column({ type: 'jsonb', nullable: true })
   condition?: GuardianConditionGroup | null;
 
-  @Field(() => ID, { nullable: true })
+  @Field(() => String, { nullable: true })
   @Column({ type: 'uuid', nullable: true })
   studentId?: string | null;
 

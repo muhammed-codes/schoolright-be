@@ -97,10 +97,10 @@ export class GuardianDecisionType {
   @Field(() => GuardianDecisionSource)
   sourceType!: GuardianDecisionSource;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   policyId?: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   ruleId?: string | null;
 
   @Field()
