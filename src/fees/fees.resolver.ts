@@ -63,12 +63,6 @@ class GenerateInvoicesResult {
   skipped!: number;
 }
 
-const FINANCE_ROLES: UserRole[] = [
-  UserRole.SUPER_ADMIN,
-  UserRole.SCHOOL_ADMIN,
-  UserRole.BURSAR,
-];
-
 const STAFF_ROLES: UserRole[] = [
   UserRole.SUPER_ADMIN,
   UserRole.SCHOOL_ADMIN,
@@ -80,10 +74,16 @@ const STAFF_ROLES: UserRole[] = [
   UserRole.SUBJECT_TEACHER,
 ];
 
+const PARENT_AND_STAFF_ROLES: UserRole[] = [
+  UserRole.PARENT,
+  ...STAFF_ROLES,
+];
+
 type AuthUser = { sub: string; schoolId: string; role: UserRole };
 
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+@Roles(...STAFF_ROLES)
 export class FeesResolver {
   constructor(private readonly feesService: FeesService) {}
 
@@ -280,6 +280,7 @@ export class FeesResolver {
 
   @Query(() => [SchoolBankAccount])
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
   bankAccounts(@CurrentUser() user: AuthUser) {
     return this.feesService.getBankAccounts(user.schoolId);
@@ -324,6 +325,7 @@ export class FeesResolver {
 
   @Query(() => StudentInvoice, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
   invoice(@Args('id') id: string, @CurrentUser() user: AuthUser) {
     return this.feesService.getInvoiceById(
@@ -374,6 +376,7 @@ export class FeesResolver {
 
   @Query(() => [StudentInvoice])
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
   myStudentInvoices(
     @Args('studentId') studentId: string,
@@ -451,6 +454,7 @@ export class FeesResolver {
 
   @Query(() => PaymentSubmissionBatch, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
   paymentSubmission(@Args('id') id: string, @CurrentUser() user: AuthUser) {
     return this.feesService.getPaymentSubmissionById(
@@ -574,6 +578,7 @@ export class FeesResolver {
 
   @Query(() => Receipt, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
   paymentReceipt(
     @Args('shareId') shareId: string,
@@ -645,7 +650,3 @@ export class FeesResolver {
     );
   }
 }
-
-// Suppress unused role arrays — they're referenced for documentation/future use
-void FINANCE_ROLES;
-void STAFF_ROLES;

@@ -659,6 +659,12 @@ export class FeesService {
         throw new ForbiddenException('You do not have access to this invoice');
       }
     }
+    const student = await this.studentRepo.findOne({
+      where: { id: studentId, schoolId },
+    });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
     return this.getStudentInvoices(studentId, schoolId);
   }
 
