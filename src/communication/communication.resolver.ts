@@ -6,8 +6,9 @@ import {
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
 } from './dto/announcement.input';
-import { CurrentUser, RequirePermission } from '../common/decorators';
+import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { JwtAuthGuard, PermissionGuard, RolesGuard } from '../common/guards';
+import { SCHOOL_STAFF_ROLES } from '../common/constants/roles.constant';
 import { AppResource } from '../access/enums/resource.enum';
 import { PermissionAction } from '../access/enums/permission-action.enum';
 import { UserRole } from '../common/enums';
@@ -19,17 +20,25 @@ type AuthUser = { sub: string; schoolId?: string; role: UserRole };
 
 @Resolver(() => Announcement)
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+@Roles(...SCHOOL_STAFF_ROLES)
 export class CommunicationResolver {
   constructor(private readonly communicationService: CommunicationService) {}
 
   @Query(() => Announcement, { nullable: true })
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.COMMUNICATION, PermissionAction.READ)
   announcement(@Args('id') id: string, @CurrentUser() user: AuthUser) {
     if (!user.schoolId) return null;
-    return this.communicationService.getById(id, user.schoolId);
+    return this.communicationService.getVisibleById(
+      id,
+      user.sub,
+      user.role,
+      user.schoolId,
+    );
   }
 
   @Query(() => [Announcement])
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.COMMUNICATION, PermissionAction.READ)
   announcements(@CurrentUser() user: AuthUser) {
     if (!user.schoolId) return [];
@@ -41,6 +50,7 @@ export class CommunicationResolver {
   }
 
   @Query(() => PaginatedAnnouncement)
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.COMMUNICATION, PermissionAction.READ)
   announcementsPage(
     @Args() pagination: PaginationArgs,

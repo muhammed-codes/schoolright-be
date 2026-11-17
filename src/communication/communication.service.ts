@@ -67,6 +67,59 @@ export class CommunicationService {
     return this.announcementRepo.findOne({ where: { id, schoolId } });
   }
 
+  private getVisibleClassIds = async (userId: string, schoolId: string) => {
+    const links = await this.studentParentRepo.find({
+      where: { parentId: userId },
+    });
+    if (!links.length) return [];
+    const students = await this.studentRepo.find({
+      where: { id: In(links.map((link) => link.studentId)), schoolId },
+    });
+    return students
+      .map((student) => student.currentClassId)
+      .filter((id): id is string => !!id);
+  };
+
+  private isVisibleTo = (
+    announcement: Announcement,
+    role: UserRole,
+    classIds: string[],
+  ) => {
+    if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN)
+      return true;
+    if (role === UserRole.PARENT) {
+      return (
+        announcement.audience === AnnouncementAudience.SCHOOL ||
+        announcement.audience === AnnouncementAudience.GUARDIANS ||
+        (announcement.audience === AnnouncementAudience.CLASS &&
+          !!announcement.targetClassId &&
+          classIds.includes(announcement.targetClassId))
+      );
+    }
+    return (
+      announcement.audience === AnnouncementAudience.SCHOOL ||
+      announcement.audience === AnnouncementAudience.STAFF
+    );
+  };
+
+  getVisibleById = async (
+    id: string,
+    userId: string,
+    role: UserRole,
+    schoolId: string,
+  ) => {
+    const announcement = await this.assertAnnouncement(id, schoolId);
+    if (announcement.status !== AnnouncementStatus.PUBLISHED)
+      throw new NotFoundException('Announcement not found');
+    const classIds =
+      role === UserRole.PARENT
+        ? await this.getVisibleClassIds(userId, schoolId)
+        : [];
+    if (!this.isVisibleTo(announcement, role, classIds))
+      throw new NotFoundException('Announcement not found');
+    return announcement;
+  };
+
   create = async (
     input: CreateAnnouncementInput,
     schoolId: string,
@@ -120,34 +173,12 @@ export class CommunicationService {
       where: { schoolId, status: AnnouncementStatus.PUBLISHED },
       order: { publishedAt: 'DESC' },
     });
-    if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN)
-      return announcements;
-    if (role === UserRole.PARENT) {
-      const links = await this.studentParentRepo.find({
-        where: { parentId: userId },
-      });
-      const classIds = links.length
-        ? (
-            await this.studentRepo.find({
-              where: { id: In(links.map((link) => link.studentId)), schoolId },
-            })
-          )
-            .map((student) => student.currentClassId)
-            .filter((id): id is string => !!id)
+    const classIds =
+      role === UserRole.PARENT
+        ? await this.getVisibleClassIds(userId, schoolId)
         : [];
-      return announcements.filter(
-        (item) =>
-          item.audience === AnnouncementAudience.SCHOOL ||
-          item.audience === AnnouncementAudience.GUARDIANS ||
-          (item.audience === AnnouncementAudience.CLASS &&
-            !!item.targetClassId &&
-            classIds.includes(item.targetClassId)),
-      );
-    }
-    return announcements.filter(
-      (item) =>
-        item.audience === AnnouncementAudience.SCHOOL ||
-        item.audience === AnnouncementAudience.STAFF,
+    return announcements.filter((item) =>
+      this.isVisibleTo(item, role, classIds),
     );
   };
 
