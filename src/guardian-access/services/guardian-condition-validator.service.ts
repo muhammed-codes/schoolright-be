@@ -100,12 +100,16 @@ export class GuardianConditionValidator {
     throw new BadRequestException('Unsupported condition node type');
   };
 
-  private validateLeaf = (node: Record<string, unknown>): GuardianConditionLeaf => {
+  private validateLeaf = (
+    node: Record<string, unknown>,
+  ): GuardianConditionLeaf => {
     const field = node.field;
     const operator = node.operator;
     if (
       typeof field !== 'string' ||
-      !Object.values(GuardianConditionField).includes(field as GuardianConditionField)
+      !Object.values(GuardianConditionField).includes(
+        field as GuardianConditionField,
+      )
     ) {
       throw new BadRequestException('Unsupported condition field');
     }
@@ -156,7 +160,9 @@ export class GuardianConditionValidator {
         if (!Array.isArray(rawValue) || rawValue.length === 0) {
           throw new BadRequestException('A non-empty list is required');
         }
-        const values = rawValue.map((item) => this.validateStringValue(field, item));
+        const values = rawValue.map((item) =>
+          this.validateStringValue(field, item),
+        );
         return values;
       }
       if (

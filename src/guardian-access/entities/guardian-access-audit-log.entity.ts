@@ -7,7 +7,11 @@ import { GuardianAuditAction } from '../enums/guardian-policy.enums';
 @Entity('guardian_access_audit_logs')
 @ObjectType()
 @Index('IDX_guardian_audit_school_created', ['schoolId', 'createdAt'])
-@Index('IDX_guardian_audit_school_entity', ['schoolId', 'entityType', 'entityId'])
+@Index('IDX_guardian_audit_school_entity', [
+  'schoolId',
+  'entityType',
+  'entityId',
+])
 export class GuardianAccessAuditLog extends BaseEntity {
   @Field()
   @Column({ type: 'uuid' })

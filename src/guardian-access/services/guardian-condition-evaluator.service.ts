@@ -54,7 +54,10 @@ export class GuardianConditionEvaluator {
     metrics: GuardianStudentMetrics,
   ): GuardianConditionEvaluation => {
     const actualValue = this.resolveFieldValue(leaf.field, metrics);
-    const detail = (matched: boolean, reason?: string): GuardianConditionDetail => ({
+    const detail = (
+      matched: boolean,
+      reason?: string,
+    ): GuardianConditionDetail => ({
       field: leaf.field,
       operator: leaf.operator,
       value: leaf.value,
@@ -68,11 +71,7 @@ export class GuardianConditionEvaluator {
         details: [detail(false, actualValue.unavailableReason)],
       };
     }
-    const matched = this.compare(
-      actualValue.value,
-      leaf.operator,
-      leaf.value,
-    );
+    const matched = this.compare(actualValue.value, leaf.operator, leaf.value);
     return {
       matched,
       unavailableReasons: [],
@@ -116,10 +115,14 @@ export class GuardianConditionEvaluator {
     expected: GuardianConditionValue,
   ): boolean => {
     if (operator === GuardianConditionOperator.IN) {
-      return Array.isArray(expected) && expected.some((item) => item === actual);
+      return (
+        Array.isArray(expected) && expected.some((item) => item === actual)
+      );
     }
     if (operator === GuardianConditionOperator.NOT_IN) {
-      return Array.isArray(expected) && !expected.some((item) => item === actual);
+      return (
+        Array.isArray(expected) && !expected.some((item) => item === actual)
+      );
     }
     if (typeof actual === 'number' && typeof expected === 'number') {
       switch (operator) {

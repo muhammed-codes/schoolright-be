@@ -11,6 +11,15 @@ export enum GuardianEffect {
   DENY = 'DENY',
 }
 
+export enum GuardianDecisionSource {
+  EXCEPTION = 'EXCEPTION',
+  STUDENT_OVERRIDE = 'STUDENT_OVERRIDE',
+  DYNAMIC_SEGMENT = 'DYNAMIC_SEGMENT',
+  SCHOOL_DEFAULT = 'SCHOOL_DEFAULT',
+  SECURITY_INVARIANT = 'SECURITY_INVARIANT',
+  DEFAULT_DENY = 'DEFAULT_DENY',
+}
+
 export enum GuardianAuditAction {
   POLICY_CREATED = 'POLICY_CREATED',
   POLICY_UPDATED = 'POLICY_UPDATED',
@@ -27,4 +36,5 @@ export enum GuardianAuditAction {
 
 registerEnumType(GuardianPolicyScope, { name: 'GuardianPolicyScope' });
 registerEnumType(GuardianEffect, { name: 'GuardianEffect' });
+registerEnumType(GuardianDecisionSource, { name: 'GuardianDecisionSource' });
 registerEnumType(GuardianAuditAction, { name: 'GuardianAuditAction' });

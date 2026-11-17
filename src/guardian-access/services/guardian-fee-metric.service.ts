@@ -50,7 +50,8 @@ export class GuardianFeeMetricService {
     if (!sessionId) {
       return {
         unavailable: {
-          feePaymentPercentage: 'No active session is configured for this school',
+          feePaymentPercentage:
+            'No active session is configured for this school',
           outstandingBalance: 'No active session is configured for this school',
         },
       };
@@ -83,7 +84,9 @@ export class GuardianFeeMetricService {
       };
     }
     return {
-      feePaymentPercentage: Number(((totalPaid / totalAmount) * 100).toFixed(2)),
+      feePaymentPercentage: Number(
+        ((totalPaid / totalAmount) * 100).toFixed(2),
+      ),
       outstandingBalance,
       unavailable: {},
     };

@@ -1,7 +1,10 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 import { Column, Entity, Index } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
-import { GuardianAction, GuardianResource } from '../enums/guardian-permission.enums';
+import {
+  GuardianAction,
+  GuardianResource,
+} from '../enums/guardian-permission.enums';
 import { GuardianEffect } from '../enums/guardian-policy.enums';
 
 @Entity('guardian_access_exceptions')
