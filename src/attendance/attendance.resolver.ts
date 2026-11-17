@@ -16,15 +16,18 @@ import {
   ClassAttendanceOverview,
 } from './dto/attendance-overview.type';
 import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../common/guards';
-import { CurrentUser, RequirePermission } from '../common/decorators';
+import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { UserRole } from '../common/enums';
 import {
   LEADERSHIP_ROLES,
+  SCHOOL_STAFF_ROLES,
   TEACHER_ROLES,
 } from '../common/constants/roles.constant';
 import { ForbiddenException } from '@nestjs/common';
 
 @Resolver()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+@Roles(...SCHOOL_STAFF_ROLES)
 export class AttendanceResolver {
   constructor(private readonly attendanceService: AttendanceService) {}
 
@@ -47,33 +50,37 @@ export class AttendanceResolver {
 
   @Query(() => [StudentAttendance])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
   studentAttendance(
     @Args('studentId') studentId: string,
     @Args('termId') termId: string,
-    @CurrentUser() user: { sub: string; role: UserRole },
+    @CurrentUser() user: { sub: string; role: UserRole; schoolId: string },
   ) {
     return this.attendanceService.getStudentAttendance(
       studentId,
       termId,
       user.sub,
       user.role,
+      user.schoolId,
     );
   }
 
   @Query(() => AttendanceSummary)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
   studentAttendanceSummary(
     @Args('studentId') studentId: string,
     @Args('termId') termId: string,
-    @CurrentUser() user: { sub: string; role: UserRole },
+    @CurrentUser() user: { sub: string; role: UserRole; schoolId: string },
   ) {
     return this.attendanceService.getStudentAttendanceSummary(
       studentId,
       termId,
       user.sub,
       user.role,
+      user.schoolId,
     );
   }
 

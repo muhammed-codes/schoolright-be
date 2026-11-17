@@ -115,30 +115,51 @@ export class AttendanceService {
     });
   };
 
-  getStudentAttendance = (
+  private assertStudentAttendanceScope = (
     studentId: string,
     termId: string,
+    schoolId: string,
     userId?: string,
     userRole?: UserRole,
   ) => {
-    const check =
+    return Promise.all([
+      this.studentRepo.findOne({ where: { id: studentId, schoolId } }),
+      this.termRepo.findOne({ where: { id: termId, schoolId } }),
       userRole === UserRole.PARENT && userId
         ? this.studentParentRepo.findOne({
             where: { studentId, parentId: userId },
           })
-        : Promise.resolve(true);
-
-    return check.then((link) => {
+        : Promise.resolve(true),
+    ]).then(([student, term, link]) => {
+      if (!student) throw new NotFoundException('Student not found');
+      if (!term) throw new NotFoundException('Term not found');
       if (!link) {
         throw new ForbiddenException(
           'You do not have access to view this student attendance',
         );
       }
-      return this.studentAttendanceRepo.find({
+    });
+  };
+
+  getStudentAttendance = (
+    studentId: string,
+    termId: string,
+    userId?: string,
+    userRole?: UserRole,
+    schoolId?: string,
+  ) => {
+    return this.assertStudentAttendanceScope(
+      studentId,
+      termId,
+      schoolId as string,
+      userId,
+      userRole,
+    ).then(() =>
+      this.studentAttendanceRepo.find({
         where: { studentId, termId },
         order: { date: 'ASC' },
-      });
-    });
+      }),
+    );
   };
 
   getClassAttendance = (
@@ -210,21 +231,16 @@ export class AttendanceService {
     termId: string,
     userId?: string,
     userRole?: UserRole,
+    schoolId?: string,
   ): Promise<AttendanceSummary> => {
-    const check =
-      userRole === UserRole.PARENT && userId
-        ? this.studentParentRepo.findOne({
-            where: { studentId, parentId: userId },
-          })
-        : Promise.resolve(true);
-
-    return check.then((link) => {
-      if (!link) {
-        throw new ForbiddenException(
-          'You do not have access to view this student attendance',
-        );
-      }
-      return this.studentAttendanceRepo
+    return this.assertStudentAttendanceScope(
+      studentId,
+      termId,
+      schoolId as string,
+      userId,
+      userRole,
+    ).then(() =>
+      this.studentAttendanceRepo
         .find({ where: { studentId, termId } })
         .then((records) => {
           let daysPresent = 0;
@@ -243,8 +259,8 @@ export class AttendanceService {
             daysLate,
             totalMarkedDays: records.length,
           };
-        });
-    });
+        }),
+    );
   };
 
   clockAction = (photo: string, userId: string) => {
