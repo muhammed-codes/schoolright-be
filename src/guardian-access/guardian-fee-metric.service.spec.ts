@@ -14,8 +14,11 @@ describe('guardian fee metric service', () => {
       status: TermStatus.ACTIVE,
     },
   ) => {
+    const findInvoices = jest
+      .fn()
+      .mockResolvedValue(invoices as StudentInvoice[]);
     const invoiceRepo = {
-      find: jest.fn().mockResolvedValue(invoices as StudentInvoice[]),
+      find: findInvoices,
     } as unknown as Repository<StudentInvoice>;
     const termRepo = {
       findOne: jest.fn().mockResolvedValue(term as Term | null),
@@ -28,11 +31,11 @@ describe('guardian fee metric service', () => {
       termRepo,
       sessionRepo,
     );
-    return { service, invoiceRepo };
+    return { service, findInvoices };
   };
 
   it('combines active term and session invoices using invoice totals', async () => {
-    const { service, invoiceRepo } = buildService([
+    const { service, findInvoices } = buildService([
       { totalAmount: 1000, totalPaid: 500, balance: 500 },
       { totalAmount: 2000, totalPaid: 1000, balance: 1000 },
     ]);
@@ -40,7 +43,7 @@ describe('guardian fee metric service', () => {
     expect(result.feePaymentPercentage).toBe(50);
     expect(result.outstandingBalance).toBe(1500);
     expect(result.unavailable).toEqual({});
-    expect(invoiceRepo.find).toHaveBeenCalledWith(
+    expect(findInvoices).toHaveBeenCalledWith(
       expect.objectContaining({
         where: [
           { schoolId: 'school-a', studentId: 'student-a', termId: 'term-a' },

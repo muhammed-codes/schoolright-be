@@ -28,17 +28,26 @@ describe('guardian policy management', () => {
 
   const buildService = (existing: GuardianAccessPolicy[] = []) => {
     const savedPolicies: GuardianAccessPolicy[] = [];
+    const savePolicy = jest.fn((policy: GuardianAccessPolicy) => {
+      savedPolicies.push({
+        ...policy,
+        rules: policy.rules ?? [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return Promise.resolve(policy);
+    });
     const policyRepo = {
-      findOne: jest.fn(async ({ where }: { where: Record<string, string> }) => {
+      findOne: jest.fn(({ where }: { where: Record<string, string> }) => {
         const saved = savedPolicies.find((policy) => policy.id === where.id);
-        if (saved) return saved;
-        return (
+        if (saved) return Promise.resolve(saved);
+        return Promise.resolve(
           existing.find((policy) =>
             Object.entries(where).every(
               ([key, value]) =>
                 policy[key as keyof GuardianAccessPolicy] === value,
             ),
-          ) ?? null
+          ) ?? null,
         );
       }),
       create: jest.fn((data: Partial<GuardianAccessPolicy>) => ({
@@ -46,15 +55,7 @@ describe('guardian policy management', () => {
         rules: [],
         ...data,
       })),
-      save: jest.fn(async (policy: GuardianAccessPolicy) => {
-        savedPolicies.push({
-          ...policy,
-          rules: policy.rules ?? [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        return policy;
-      }),
+      save: savePolicy,
       find: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     } as unknown as Repository<GuardianAccessPolicy>;
@@ -72,7 +73,7 @@ describe('guardian policy management', () => {
       auditService,
       validator,
     );
-    return { service, policyRepo };
+    return { service, policyRepo, savePolicy };
   };
 
   beforeEach(() => record.mockReset());
@@ -123,7 +124,7 @@ describe('guardian policy management', () => {
   });
 
   it('creates a school default policy and records an audit log', async () => {
-    const { service, policyRepo } = buildService();
+    const { service, savePolicy } = buildService();
     const created = await service.create(
       {
         name: 'Default',
@@ -139,7 +140,7 @@ describe('guardian policy management', () => {
       admin,
     );
     expect(created.schoolId).toBe('school-a');
-    expect(policyRepo.save).toHaveBeenCalled();
+    expect(savePolicy).toHaveBeenCalled();
     expect(record).toHaveBeenCalledWith(
       'school-a',
       'admin-a',

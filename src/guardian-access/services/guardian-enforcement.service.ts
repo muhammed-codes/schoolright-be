@@ -155,36 +155,34 @@ export class GuardianEnforcementService {
       }),
       this.exceptionRepo.find({ where: { schoolId, studentId: student.id } }),
     ]);
-    const permissions = await Promise.all(
-      Object.values(GuardianResource).flatMap((resource) =>
-        Object.values(GuardianAction).map(async (action) => {
-          const decision = this.evaluator.evaluate({
-            user: {
-              sub: guardianId,
-              role: UserRole.PARENT,
-              schoolId,
-            },
-            studentId: student.id,
-            studentSchoolId: student.schoolId,
-            guardianLinked: true,
-            resource,
-            action,
-            policies,
-            exceptions,
-            metrics,
-          });
-          return {
-            resource,
-            action,
-            allowed: decision.allowed,
-            reason: decision.reason,
-            sourceType: decision.sourceType,
-            policyId: decision.policyId,
-            ruleId: decision.ruleId,
-            evaluatedAt: decision.evaluatedAt,
-          };
-        }),
-      ),
+    const permissions = Object.values(GuardianResource).flatMap((resource) =>
+      Object.values(GuardianAction).map((action) => {
+        const decision = this.evaluator.evaluate({
+          user: {
+            sub: guardianId,
+            role: UserRole.PARENT,
+            schoolId,
+          },
+          studentId: student.id,
+          studentSchoolId: student.schoolId,
+          guardianLinked: true,
+          resource,
+          action,
+          policies,
+          exceptions,
+          metrics,
+        });
+        return {
+          resource,
+          action,
+          allowed: decision.allowed,
+          reason: decision.reason,
+          sourceType: decision.sourceType,
+          policyId: decision.policyId,
+          ruleId: decision.ruleId,
+          evaluatedAt: decision.evaluatedAt,
+        };
+      }),
     );
     return {
       studentId: student.id,
