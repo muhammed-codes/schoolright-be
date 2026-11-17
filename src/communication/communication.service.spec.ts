@@ -151,7 +151,11 @@ describe('CommunicationService announcement detail visibility', () => {
       studentRepo as any,
       userRepo as any,
       {} as any,
-      { notifySchool: jest.fn(), notifyUsersByRole: jest.fn(), notifyParentsOfClass: jest.fn() } as any,
+      {
+        notifySchool: jest.fn(),
+        notifyUsersByRole: jest.fn(),
+        notifyParentsOfClass: jest.fn(),
+      } as any,
     );
     return {
       service,
@@ -200,7 +204,8 @@ describe('CommunicationService announcement detail visibility', () => {
   });
 
   it('hides a class announcement from a parent of another class', async () => {
-    const { service, announcementRepo, studentParentRepo, studentRepo } = makeDetailService();
+    const { service, announcementRepo, studentParentRepo, studentRepo } =
+      makeDetailService();
     announcementRepo.findOne.mockResolvedValue({
       id: 'announcement-a',
       schoolId: 'school-a',

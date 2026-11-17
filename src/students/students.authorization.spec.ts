@@ -11,7 +11,12 @@ describe('StudentsService parent access', () => {
       studentsRepository,
       usersService,
     });
-    return { service, studentParentsRepository, studentsRepository, usersService };
+    return {
+      service,
+      studentParentsRepository,
+      studentsRepository,
+      usersService,
+    };
   };
 
   it('returns only a linked child to a parent', async () => {

@@ -12,7 +12,9 @@ describe('ResultsService parent access', () => {
       getOne: jest.fn().mockResolvedValue(null),
       getMany: jest.fn().mockResolvedValue([]),
     };
-    const studentResultRepo = { createQueryBuilder: jest.fn().mockReturnValue(query) };
+    const studentResultRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(query),
+    };
     const studentRepo = { findOne: jest.fn() };
     const termRepo = { findOne: jest.fn() };
     const studentParentRepo = { findOne: jest.fn() };
@@ -46,7 +48,10 @@ describe('ResultsService parent access', () => {
       id: 'student-a',
       schoolId: 'school-a',
     });
-    deps.termRepo.findOne.mockResolvedValue({ id: 'term-a', schoolId: 'school-a' });
+    deps.termRepo.findOne.mockResolvedValue({
+      id: 'term-a',
+      schoolId: 'school-a',
+    });
     deps.studentParentRepo.findOne.mockResolvedValue({
       studentId: 'student-a',
       parentId: 'parent-a',

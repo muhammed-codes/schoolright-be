@@ -74,10 +74,7 @@ const STAFF_ROLES: UserRole[] = [
   UserRole.SUBJECT_TEACHER,
 ];
 
-const PARENT_AND_STAFF_ROLES: UserRole[] = [
-  UserRole.PARENT,
-  ...STAFF_ROLES,
-];
+const PARENT_AND_STAFF_ROLES: UserRole[] = [UserRole.PARENT, ...STAFF_ROLES];
 
 type AuthUser = { sub: string; schoolId: string; role: UserRole };
 

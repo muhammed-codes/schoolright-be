@@ -93,114 +93,77 @@ describe('authorization guards', () => {
 });
 
 describe('resolver role metadata', () => {
-  const httpContext = (
+  const canActivate = (
     role: UserRole,
-    handler: (...args: unknown[]) => unknown,
     resolverClass: new (...args: never[]) => unknown,
-  ) =>
-    ({
+    methodName: string,
+  ) => {
+    const handler = Reflect.get(resolverClass.prototype, methodName) as (
+      ...args: unknown[]
+    ) => unknown;
+    const context = {
       getType: () => 'http',
       getHandler: () => handler,
       getClass: () => resolverClass,
       getArgs: () => [],
       getArgByIndex: () => undefined,
       switchToHttp: () => ({ getRequest: () => ({ user: { role } }) }),
-    }) as unknown as ExecutionContext;
-
-  const canActivate = (
-    role: UserRole,
-    handler: (...args: unknown[]) => unknown,
-    resolverClass: new (...args: never[]) => unknown,
-  ) => new RolesGuard(new Reflector()).canActivate(httpContext(role, handler, resolverClass));
+    } as unknown as ExecutionContext;
+    return new RolesGuard(new Reflector()).canActivate(context);
+  };
 
   it('denies parents on school-wide fee operations', () => {
     expect(() =>
-      canActivate(
-        UserRole.PARENT,
-        FeesResolver.prototype.invoices,
-        FeesResolver,
-      ),
+      canActivate(UserRole.PARENT, FeesResolver, 'invoices'),
     ).toThrow('You do not have the required role');
   });
 
   it('allows parents on fee operations intended for guardians', () => {
-    expect(
-      canActivate(
-        UserRole.PARENT,
-        FeesResolver.prototype.bankAccounts,
-        FeesResolver,
-      ),
-    ).toBe(true);
-    expect(
-      canActivate(
-        UserRole.PARENT,
-        FeesResolver.prototype.paymentReceipt,
-        FeesResolver,
-      ),
-    ).toBe(true);
+    expect(canActivate(UserRole.PARENT, FeesResolver, 'bankAccounts')).toBe(
+      true,
+    );
+    expect(canActivate(UserRole.PARENT, FeesResolver, 'paymentReceipt')).toBe(
+      true,
+    );
   });
 
   it('denies parents on staff-only attendance, results, and announcement operations', () => {
     expect(() =>
-      canActivate(
-        UserRole.PARENT,
-        AttendanceResolver.prototype.staffAttendanceLog,
-        AttendanceResolver,
-      ),
+      canActivate(UserRole.PARENT, AttendanceResolver, 'staffAttendanceLog'),
+    ).toThrow('You do not have the required role');
+    expect(() =>
+      canActivate(UserRole.PARENT, ResultsResolver, 'resultAnalytics'),
     ).toThrow('You do not have the required role');
     expect(() =>
       canActivate(
         UserRole.PARENT,
-        ResultsResolver.prototype.resultAnalytics,
-        ResultsResolver,
-      ),
-    ).toThrow('You do not have the required role');
-    expect(() =>
-      canActivate(
-        UserRole.PARENT,
-        CommunicationResolver.prototype.adminAnnouncementsPage,
         CommunicationResolver,
+        'adminAnnouncementsPage',
       ),
     ).toThrow('You do not have the required role');
   });
 
   it('allows parents on their own attendance, results, and announcements', () => {
     expect(
-      canActivate(
-        UserRole.PARENT,
-        AttendanceResolver.prototype.studentAttendance,
-        AttendanceResolver,
-      ),
+      canActivate(UserRole.PARENT, AttendanceResolver, 'studentAttendance'),
     ).toBe(true);
+    expect(canActivate(UserRole.PARENT, ResultsResolver, 'studentResult')).toBe(
+      true,
+    );
     expect(
-      canActivate(
-        UserRole.PARENT,
-        ResultsResolver.prototype.studentResult,
-        ResultsResolver,
-      ),
-    ).toBe(true);
-    expect(
-      canActivate(
-        UserRole.PARENT,
-        CommunicationResolver.prototype.announcement,
-        CommunicationResolver,
-      ),
+      canActivate(UserRole.PARENT, CommunicationResolver, 'announcement'),
     ).toBe(true);
   });
 
   it('preserves super admin access to staff-only operations', () => {
+    expect(canActivate(UserRole.SUPER_ADMIN, FeesResolver, 'invoices')).toBe(
+      true,
+    );
     expect(
       canActivate(
         UserRole.SUPER_ADMIN,
-        FeesResolver.prototype.invoices,
-        FeesResolver,
-      ),
-    ).toBe(true);
-    expect(
-      canActivate(
-        UserRole.SUPER_ADMIN,
-        CommunicationResolver.prototype.adminAnnouncementsPage,
         CommunicationResolver,
+        'adminAnnouncementsPage',
       ),
     ).toBe(true);
   });

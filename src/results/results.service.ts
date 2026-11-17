@@ -1292,81 +1292,82 @@ export class ResultsService {
           })
         : Promise.resolve(true);
 
-    return this.assertStudentAndTermInSchool(studentId, termId, schoolId)
-      .then(async () => {
+    return this.assertStudentAndTermInSchool(studentId, termId, schoolId).then(
+      async () => {
         const link = await parentCheck;
-      if (!link) {
-        throw new ForbiddenException(
-          'You do not have access to this student result',
-        );
-      }
+        if (!link) {
+          throw new ForbiddenException(
+            'You do not have access to this student result',
+          );
+        }
 
-      const qb = this.studentResultRepo
-        .createQueryBuilder('sr')
-        .innerJoinAndSelect('sr.resultSheet', 'rs')
-        .leftJoinAndSelect('rs.term', 't')
-        .leftJoinAndSelect('t.session', 'sess')
-        .leftJoinAndSelect('sr.subjectScores', 'ss')
-        .leftJoinAndSelect('ss.subject', 'sub')
-        .where('sr.studentId = :studentId', { studentId })
-        .andWhere('rs.termId = :termId', { termId })
-        .andWhere('sr.schoolId = :schoolId', { schoolId });
+        const qb = this.studentResultRepo
+          .createQueryBuilder('sr')
+          .innerJoinAndSelect('sr.resultSheet', 'rs')
+          .leftJoinAndSelect('rs.term', 't')
+          .leftJoinAndSelect('t.session', 'sess')
+          .leftJoinAndSelect('sr.subjectScores', 'ss')
+          .leftJoinAndSelect('ss.subject', 'sub')
+          .where('sr.studentId = :studentId', { studentId })
+          .andWhere('rs.termId = :termId', { termId })
+          .andWhere('sr.schoolId = :schoolId', { schoolId });
 
-      if (userId && userRole && TEACHER_ROLES.includes(userRole)) {
-        const classIds = await this.getTeacherResultClassIds(
-          userId,
-          userRole,
-          schoolId,
-        );
-        if (!classIds?.length) return null;
-        qb.andWhere('rs.classId IN (:...classIds)', { classIds });
-      }
+        if (userId && userRole && TEACHER_ROLES.includes(userRole)) {
+          const classIds = await this.getTeacherResultClassIds(
+            userId,
+            userRole,
+            schoolId,
+          );
+          if (!classIds?.length) return null;
+          qb.andWhere('rs.classId IN (:...classIds)', { classIds });
+        }
 
-      if (userRole === UserRole.PARENT) {
-        qb.andWhere('rs.status = :publishedStatus', {
-          publishedStatus: ResultStatus.PUBLISHED,
-        });
-      }
-
-      return qb.getOne().then((result) => {
-        if (!result) return null;
-        if (userId && userRole === UserRole.SUBJECT_TEACHER) {
-          return this.getTeacherSubjectAssignments(userId, schoolId, [
-            result.resultSheet.classId,
-          ]).then((assignments) => {
-            const subjectIds = assignments.map(
-              (assignment) => assignment.subjectId,
-            );
-            result.subjectScores = (result.subjectScores || []).filter(
-              (score) => subjectIds.includes(score.subjectId),
-            );
-            return this.resultSheetRepo
-              .findOne({ where: { id: result.resultSheetId, schoolId } })
-              .then((sheet) => {
-                if (sheet)
-                  this.applyComputedMetrics(
-                    sheet.scoreComponents || [],
-                    [result],
-                    sheet.gradingSystem,
-                  );
-                return result;
-              });
+        if (userRole === UserRole.PARENT) {
+          qb.andWhere('rs.status = :publishedStatus', {
+            publishedStatus: ResultStatus.PUBLISHED,
           });
         }
-        return this.resultSheetRepo
-          .findOne({ where: { id: result.resultSheetId, schoolId } })
-          .then((sheet) => {
-            if (sheet) {
-              this.applyComputedMetrics(
-                sheet.scoreComponents || [],
-                [result],
-                sheet.gradingSystem,
+
+        return qb.getOne().then((result) => {
+          if (!result) return null;
+          if (userId && userRole === UserRole.SUBJECT_TEACHER) {
+            return this.getTeacherSubjectAssignments(userId, schoolId, [
+              result.resultSheet.classId,
+            ]).then((assignments) => {
+              const subjectIds = assignments.map(
+                (assignment) => assignment.subjectId,
               );
-            }
-            return result;
-          });
-      });
-    });
+              result.subjectScores = (result.subjectScores || []).filter(
+                (score) => subjectIds.includes(score.subjectId),
+              );
+              return this.resultSheetRepo
+                .findOne({ where: { id: result.resultSheetId, schoolId } })
+                .then((sheet) => {
+                  if (sheet)
+                    this.applyComputedMetrics(
+                      sheet.scoreComponents || [],
+                      [result],
+                      sheet.gradingSystem,
+                    );
+                  return result;
+                });
+            });
+          }
+          return this.resultSheetRepo
+            .findOne({ where: { id: result.resultSheetId, schoolId } })
+            .then((sheet) => {
+              if (sheet) {
+                this.applyComputedMetrics(
+                  sheet.scoreComponents || [],
+                  [result],
+                  sheet.gradingSystem,
+                );
+              }
+              return result;
+            });
+        });
+      },
+    );
   };
 
   getStudentAcademicHistory = async (

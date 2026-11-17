@@ -464,7 +464,9 @@ export class StudentsService {
       this.usersService.findById(parentUserId).then((parentUser) => {
         if (!parentUser) throw new NotFoundException('Parent user not found');
         if (parentUser.role !== UserRole.PARENT) {
-          throw new BadRequestException('Only users with a parent role can be linked');
+          throw new BadRequestException(
+            'Only users with a parent role can be linked',
+          );
         }
         if (parentUser.schoolId !== schoolId) {
           throw new ForbiddenException('Parent user is outside your school');

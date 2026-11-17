@@ -325,7 +325,9 @@ export class AttendanceService {
                     record.clockOutPhotoPublicId = uploadResult.publicId;
                     return this.staffAttendanceRepo.save(record);
                   } else {
-                    throw new BadRequestException('You have already clocked out today');
+                    throw new BadRequestException(
+                      'You have already clocked out today',
+                    );
                   }
                 });
             });
@@ -426,7 +428,9 @@ export class AttendanceService {
     return this.jwtService
       .verifyAsync<{ schoolId?: string; purpose?: string }>(token, { secret })
       .catch(() => {
-        throw new BadRequestException('The QR code has expired, please scan a new one');
+        throw new BadRequestException(
+          'The QR code has expired, please scan a new one',
+        );
       })
       .then((decodedToken) => {
         if (
