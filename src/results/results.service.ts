@@ -1255,6 +1255,29 @@ export class ResultsService {
     };
   };
 
+  private assertStudentInSchool = (studentId: string, schoolId: string) => {
+    return this.studentRepo
+      .findOne({ where: { id: studentId, schoolId } })
+      .then((student) => {
+        if (!student) throw new NotFoundException('Student not found');
+      });
+  };
+
+  private assertStudentAndTermInSchool = (
+    studentId: string,
+    termId: string,
+    schoolId: string,
+  ) => {
+    return Promise.all([
+      this.assertStudentInSchool(studentId, schoolId),
+      this.termRepo
+        .findOne({ where: { id: termId, schoolId } })
+        .then((term) => {
+          if (!term) throw new NotFoundException('Term not found');
+        }),
+    ]).then(() => undefined);
+  };
+
   getStudentResult = (
     studentId: string,
     termId: string,
@@ -1269,7 +1292,9 @@ export class ResultsService {
           })
         : Promise.resolve(true);
 
-    return parentCheck.then(async (link) => {
+    return this.assertStudentAndTermInSchool(studentId, termId, schoolId)
+      .then(async () => {
+        const link = await parentCheck;
       if (!link) {
         throw new ForbiddenException(
           'You do not have access to this student result',
@@ -1523,8 +1548,12 @@ export class ResultsService {
     parentUserId: string,
     schoolId: string,
   ) => {
-    return this.studentParentRepo
-      .findOne({ where: { studentId, parentId: parentUserId } })
+    return this.assertStudentInSchool(studentId, schoolId)
+      .then(() =>
+        this.studentParentRepo.findOne({
+          where: { studentId, parentId: parentUserId },
+        }),
+      )
       .then((link) => {
         if (!link) {
           throw new ForbiddenException(

@@ -14,10 +14,13 @@ import { PaginatedClassScores } from './dto/paginated-class-scores.type';
 import { TeacherScoringAssignment } from './dto/teacher-scoring-assignment.type';
 import { ClassBroadsheetPage } from './dto/class-broadsheet.type';
 import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../common/guards';
-import { CurrentUser, RequirePermission } from '../common/decorators';
+import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { UserRole, ResultStatus } from '../common/enums';
+import { SCHOOL_STAFF_ROLES } from '../common/constants/roles.constant';
 
 @Resolver()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+@Roles(...SCHOOL_STAFF_ROLES)
 export class ResultsResolver {
   constructor(private readonly resultsService: ResultsService) {}
 
@@ -186,6 +189,7 @@ export class ResultsResolver {
 
   @Query(() => StudentResult, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.RESULTS, PermissionAction.READ)
   studentResult(
     @Args('studentId') studentId: string,
@@ -235,6 +239,7 @@ export class ResultsResolver {
 
   @Query(() => [StudentResult])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.RESULTS, PermissionAction.READ)
   myChildResults(
     @Args('studentId') studentId: string,
