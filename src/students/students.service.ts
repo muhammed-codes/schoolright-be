@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager } from 'typeorm';
@@ -465,6 +466,9 @@ export class StudentsService {
         if (parentUser.role !== UserRole.PARENT) {
           throw new BadRequestException('Only users with a parent role can be linked');
         }
+        if (parentUser.schoolId !== schoolId) {
+          throw new ForbiddenException('Parent user is outside your school');
+        }
         const record = this.studentParentsRepository.create({
           studentId: student.id,
           parentId: parentUser.id,
@@ -482,14 +486,21 @@ export class StudentsService {
     schoolId: string,
   ) => {
     return this.getStudentById(studentId, schoolId).then(() =>
-      this.studentParentsRepository
-        .findOne({ where: { studentId, parentId: parentUserId } })
-        .then((record) => {
-          if (!record) {
-            throw new NotFoundException('Parent link not found');
-          }
-          return this.studentParentsRepository.remove(record).then(() => true);
-        }),
+      this.usersService.findById(parentUserId).then((parentUser) => {
+        if (!parentUser || parentUser.schoolId !== schoolId) {
+          throw new ForbiddenException('Parent user is outside your school');
+        }
+        return this.studentParentsRepository
+          .findOne({ where: { studentId, parentId: parentUserId } })
+          .then((record) => {
+            if (!record) {
+              throw new NotFoundException('Parent link not found');
+            }
+            return this.studentParentsRepository
+              .remove(record)
+              .then(() => true);
+          });
+      }),
     );
   };
 
@@ -510,6 +521,24 @@ export class StudentsService {
             (s) => s && !s.isArchived && (!schoolId || s.schoolId === schoolId),
           ),
       );
+  }
+
+  getStudentsByGuardian(guardianId: string, schoolId: string) {
+    return this.usersService.findById(guardianId).then((guardian) => {
+      if (!guardian || guardian.schoolId !== schoolId) {
+        throw new ForbiddenException('Guardian is outside your school');
+      }
+      return this.getStudentsByParent(guardianId, schoolId);
+    });
+  }
+
+  getLinkedStudentById(id: string, parentUserId: string, schoolId: string) {
+    return this.studentParentsRepository
+      .findOne({ where: { studentId: id, parentId: parentUserId } })
+      .then((link) => {
+        if (!link) throw new ForbiddenException('Student is not linked to you');
+        return this.getStudentById(id, schoolId);
+      });
   }
 
   uploadPassportPhoto = (

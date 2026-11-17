@@ -15,7 +15,10 @@ import { StudentStatistics } from './dto/student-statistics.type';
 import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../common/guards';
 import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { Gender, StudentStatus, UserRole } from '../common/enums';
-import { TEACHER_ROLES } from '../common/constants/roles.constant';
+import {
+  SCHOOL_STAFF_ROLES,
+  TEACHER_ROLES,
+} from '../common/constants/roles.constant';
 import { PaginationArgs, createPaginatedType } from '../common/pagination';
 
 const PaginatedStudent = createPaginatedType(Student);
@@ -26,6 +29,7 @@ export class StudentsResolver {
 
   @Query(() => [Student])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   studentsByClass(
     @Args('classId') classId: string,
@@ -35,12 +39,19 @@ export class StudentsResolver {
   }
 
   @Query(() => Student, { nullable: true })
-  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   student(
     @Args('id') id: string,
     @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
+    if (user.role === UserRole.PARENT) {
+      return this.studentsService.getLinkedStudentById(
+        id,
+        user.sub,
+        user.schoolId,
+      );
+    }
     if (!TEACHER_ROLES.includes(user.role)) {
       return this.studentsService.getStudentById(id, user.schoolId);
     }
@@ -70,16 +81,21 @@ export class StudentsResolver {
 
   @Query(() => [Student])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   guardianStudents(
     @Args('guardianId') guardianId: string,
     @CurrentUser() user: { schoolId: string },
   ) {
-    return this.studentsService.getStudentsByParent(guardianId, user.schoolId);
+    return this.studentsService.getStudentsByGuardian(
+      guardianId,
+      user.schoolId,
+    );
   }
 
   @Query(() => [Student])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   searchStudents(
     @Args('query') query: string,
@@ -107,6 +123,7 @@ export class StudentsResolver {
 
   @Query(() => PaginatedStudent)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   studentsPage(
     @Args('query', { type: () => String, defaultValue: '' }) query: string,
@@ -149,6 +166,7 @@ export class StudentsResolver {
 
   @Query(() => StudentStatistics)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   studentStatistics(
     @Args('query', { type: () => String, defaultValue: '' }) query: string,
@@ -176,6 +194,7 @@ export class StudentsResolver {
 
   @Mutation(() => Student)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.CREATE)
   createStudent(
     @Args('input') input: CreateStudentInput,
@@ -186,6 +205,7 @@ export class StudentsResolver {
 
   @Mutation(() => Student)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.UPDATE)
   updateStudent(
     @Args('id') id: string,
@@ -197,6 +217,7 @@ export class StudentsResolver {
 
   @Mutation(() => BulkImportResult)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.CREATE)
   bulkImportStudents(
     @Args('students', { type: () => [CreateStudentInput] })
@@ -208,6 +229,7 @@ export class StudentsResolver {
 
   @Mutation(() => Student)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.UPDATE)
   linkParent(
     @Args('studentId') studentId: string,
@@ -223,6 +245,7 @@ export class StudentsResolver {
 
   @Mutation(() => Boolean)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.UPDATE)
   unlinkParent(
     @Args('studentId') studentId: string,
@@ -238,6 +261,7 @@ export class StudentsResolver {
 
   @Query(() => [StudentParent])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   studentParents(
     @Args('studentId') studentId: string,
@@ -248,6 +272,7 @@ export class StudentsResolver {
 
   @Mutation(() => Student)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.CREATE)
   uploadPassportPhoto(
     @Args('studentId') studentId: string,
@@ -263,6 +288,7 @@ export class StudentsResolver {
 
   @Mutation(() => PromotionResult)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.UPDATE)
   promoteStudents(
     @Args('input') input: PromoteStudentsInput,
@@ -273,6 +299,7 @@ export class StudentsResolver {
 
   @Query(() => [Student])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
   archivedStudents(@CurrentUser() user: { schoolId: string }) {
     return this.studentsService.getArchivedStudents(user.schoolId);
