@@ -119,14 +119,24 @@ export class CreateGuardianAccess1794400000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "guardian_access_audit_logs";`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "guardian_access_exceptions";`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "guardian_access_policy_rules";`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "guardian_access_audit_logs";`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "guardian_access_exceptions";`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "guardian_access_policy_rules";`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "guardian_access_policies";`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "guardian_audit_action_enum";`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "guardian_audit_action_enum";`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "guardian_action_enum";`);
     await queryRunner.query(`DROP TYPE IF EXISTS "guardian_resource_enum";`);
     await queryRunner.query(`DROP TYPE IF EXISTS "guardian_effect_enum";`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "guardian_policy_scope_enum";`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "guardian_policy_scope_enum";`,
+    );
   }
 }
