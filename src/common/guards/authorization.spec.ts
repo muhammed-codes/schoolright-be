@@ -9,6 +9,10 @@ import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { AppResource } from '../../access/enums/resource.enum';
 import { PermissionAction } from '../../access/enums/permission-action.enum';
+import { FeesResolver } from '../../fees/fees.resolver';
+import { AttendanceResolver } from '../../attendance/attendance.resolver';
+import { ResultsResolver } from '../../results/results.resolver';
+import { CommunicationResolver } from '../../communication/communication.resolver';
 
 const context = (user?: unknown) =>
   ({
@@ -85,5 +89,119 @@ describe('authorization guards', () => {
     expect(guard.canActivate(context({ role: UserRole.SCHOOL_ADMIN }))).toBe(
       true,
     );
+  });
+});
+
+describe('resolver role metadata', () => {
+  const httpContext = (
+    role: UserRole,
+    handler: (...args: unknown[]) => unknown,
+    resolverClass: new (...args: never[]) => unknown,
+  ) =>
+    ({
+      getType: () => 'http',
+      getHandler: () => handler,
+      getClass: () => resolverClass,
+      getArgs: () => [],
+      getArgByIndex: () => undefined,
+      switchToHttp: () => ({ getRequest: () => ({ user: { role } }) }),
+    }) as unknown as ExecutionContext;
+
+  const canActivate = (
+    role: UserRole,
+    handler: (...args: unknown[]) => unknown,
+    resolverClass: new (...args: never[]) => unknown,
+  ) => new RolesGuard(new Reflector()).canActivate(httpContext(role, handler, resolverClass));
+
+  it('denies parents on school-wide fee operations', () => {
+    expect(() =>
+      canActivate(
+        UserRole.PARENT,
+        FeesResolver.prototype.invoices,
+        FeesResolver,
+      ),
+    ).toThrow('You do not have the required role');
+  });
+
+  it('allows parents on fee operations intended for guardians', () => {
+    expect(
+      canActivate(
+        UserRole.PARENT,
+        FeesResolver.prototype.bankAccounts,
+        FeesResolver,
+      ),
+    ).toBe(true);
+    expect(
+      canActivate(
+        UserRole.PARENT,
+        FeesResolver.prototype.paymentReceipt,
+        FeesResolver,
+      ),
+    ).toBe(true);
+  });
+
+  it('denies parents on staff-only attendance, results, and announcement operations', () => {
+    expect(() =>
+      canActivate(
+        UserRole.PARENT,
+        AttendanceResolver.prototype.staffAttendanceLog,
+        AttendanceResolver,
+      ),
+    ).toThrow('You do not have the required role');
+    expect(() =>
+      canActivate(
+        UserRole.PARENT,
+        ResultsResolver.prototype.resultAnalytics,
+        ResultsResolver,
+      ),
+    ).toThrow('You do not have the required role');
+    expect(() =>
+      canActivate(
+        UserRole.PARENT,
+        CommunicationResolver.prototype.adminAnnouncementsPage,
+        CommunicationResolver,
+      ),
+    ).toThrow('You do not have the required role');
+  });
+
+  it('allows parents on their own attendance, results, and announcements', () => {
+    expect(
+      canActivate(
+        UserRole.PARENT,
+        AttendanceResolver.prototype.studentAttendance,
+        AttendanceResolver,
+      ),
+    ).toBe(true);
+    expect(
+      canActivate(
+        UserRole.PARENT,
+        ResultsResolver.prototype.studentResult,
+        ResultsResolver,
+      ),
+    ).toBe(true);
+    expect(
+      canActivate(
+        UserRole.PARENT,
+        CommunicationResolver.prototype.announcement,
+        CommunicationResolver,
+      ),
+    ).toBe(true);
+  });
+
+  it('preserves super admin access to staff-only operations', () => {
+    expect(
+      canActivate(
+        UserRole.SUPER_ADMIN,
+        FeesResolver.prototype.invoices,
+        FeesResolver,
+      ),
+    ).toBe(true);
+    expect(
+      canActivate(
+        UserRole.SUPER_ADMIN,
+        CommunicationResolver.prototype.adminAnnouncementsPage,
+        CommunicationResolver,
+      ),
+    ).toBe(true);
   });
 });

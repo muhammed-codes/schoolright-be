@@ -129,3 +129,137 @@ describe('CommunicationService audience boundaries', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
+
+describe('CommunicationService announcement detail visibility', () => {
+  const makeDetailService = () => {
+    const announcementRepo = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn((input) => input),
+      save: jest.fn(async (input) => input),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+    const classRepo = { findOne: jest.fn(), find: jest.fn() };
+    const studentParentRepo = { find: jest.fn().mockResolvedValue([]) };
+    const studentRepo = { find: jest.fn().mockResolvedValue([]) };
+    const userRepo = { find: jest.fn() };
+    const service = new CommunicationService(
+      announcementRepo as any,
+      classRepo as any,
+      studentParentRepo as any,
+      studentRepo as any,
+      userRepo as any,
+      {} as any,
+      { notifySchool: jest.fn(), notifyUsersByRole: jest.fn(), notifyParentsOfClass: jest.fn() } as any,
+    );
+    return {
+      service,
+      announcementRepo,
+      studentParentRepo,
+      studentRepo,
+    };
+  };
+
+  it('hides an unpublished announcement from a parent', async () => {
+    const { service, announcementRepo } = makeDetailService();
+    announcementRepo.findOne.mockResolvedValue({
+      id: 'announcement-a',
+      schoolId: 'school-a',
+      status: AnnouncementStatus.DRAFT,
+      audience: AnnouncementAudience.SCHOOL,
+    });
+
+    await expect(
+      service.getVisibleById(
+        'announcement-a',
+        'parent-a',
+        UserRole.PARENT,
+        'school-a',
+      ),
+    ).rejects.toThrow('Announcement not found');
+  });
+
+  it('hides a staff-only announcement from a parent', async () => {
+    const { service, announcementRepo } = makeDetailService();
+    announcementRepo.findOne.mockResolvedValue({
+      id: 'announcement-a',
+      schoolId: 'school-a',
+      status: AnnouncementStatus.PUBLISHED,
+      audience: AnnouncementAudience.STAFF,
+    });
+
+    await expect(
+      service.getVisibleById(
+        'announcement-a',
+        'parent-a',
+        UserRole.PARENT,
+        'school-a',
+      ),
+    ).rejects.toThrow('Announcement not found');
+  });
+
+  it('hides a class announcement from a parent of another class', async () => {
+    const { service, announcementRepo, studentParentRepo, studentRepo } = makeDetailService();
+    announcementRepo.findOne.mockResolvedValue({
+      id: 'announcement-a',
+      schoolId: 'school-a',
+      status: AnnouncementStatus.PUBLISHED,
+      audience: AnnouncementAudience.CLASS,
+      targetClassId: 'class-b',
+    });
+    studentParentRepo.find.mockResolvedValue([{ studentId: 'student-a' }]);
+    studentRepo.find.mockResolvedValue([
+      { id: 'student-a', currentClassId: 'class-a', schoolId: 'school-a' },
+    ]);
+
+    await expect(
+      service.getVisibleById(
+        'announcement-a',
+        'parent-a',
+        UserRole.PARENT,
+        'school-a',
+      ),
+    ).rejects.toThrow('Announcement not found');
+  });
+
+  it('allows a parent to read a published guardian announcement', async () => {
+    const { service, announcementRepo } = makeDetailService();
+    const announcement = {
+      id: 'announcement-a',
+      schoolId: 'school-a',
+      status: AnnouncementStatus.PUBLISHED,
+      audience: AnnouncementAudience.GUARDIANS,
+    };
+    announcementRepo.findOne.mockResolvedValue(announcement);
+
+    await expect(
+      service.getVisibleById(
+        'announcement-a',
+        'parent-a',
+        UserRole.PARENT,
+        'school-a',
+      ),
+    ).resolves.toBe(announcement);
+  });
+
+  it('preserves staff access to published announcements', async () => {
+    const { service, announcementRepo } = makeDetailService();
+    const announcement = {
+      id: 'announcement-a',
+      schoolId: 'school-a',
+      status: AnnouncementStatus.PUBLISHED,
+      audience: AnnouncementAudience.STAFF,
+    };
+    announcementRepo.findOne.mockResolvedValue(announcement);
+
+    await expect(
+      service.getVisibleById(
+        'announcement-a',
+        'teacher-a',
+        UserRole.CLASS_TEACHER,
+        'school-a',
+      ),
+    ).resolves.toBe(announcement);
+  });
+});
