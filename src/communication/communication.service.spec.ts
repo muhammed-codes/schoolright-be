@@ -248,6 +248,26 @@ describe('CommunicationService announcement detail visibility', () => {
     ).resolves.toBe(announcement);
   });
 
+  it('preserves admin access to draft announcements', async () => {
+    const { service, announcementRepo } = makeDetailService();
+    const announcement = {
+      id: 'announcement-a',
+      schoolId: 'school-a',
+      status: AnnouncementStatus.DRAFT,
+      audience: AnnouncementAudience.SCHOOL,
+    };
+    announcementRepo.findOne.mockResolvedValue(announcement);
+
+    await expect(
+      service.getVisibleById(
+        'announcement-a',
+        'admin-a',
+        UserRole.SCHOOL_ADMIN,
+        'school-a',
+      ),
+    ).resolves.toBe(announcement);
+  });
+
   it('preserves staff access to published announcements', async () => {
     const { service, announcementRepo } = makeDetailService();
     const announcement = {

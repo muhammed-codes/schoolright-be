@@ -109,7 +109,9 @@ export class CommunicationService {
     schoolId: string,
   ) => {
     const announcement = await this.assertAnnouncement(id, schoolId);
-    if (announcement.status !== AnnouncementStatus.PUBLISHED)
+    const admin =
+      role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN;
+    if (announcement.status !== AnnouncementStatus.PUBLISHED && !admin)
       throw new NotFoundException('Announcement not found');
     const classIds =
       role === UserRole.PARENT
