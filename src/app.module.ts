@@ -26,6 +26,7 @@ import { FeesModule } from './fees/fees.module';
 import { CommunicationModule } from './communication/communication.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { MarketingModule } from './marketing/marketing.module';
+import { GuardianAccessModule } from './guardian-access/guardian-access.module';
 import { validateEnvironment } from './config/environment.validation';
 
 const isProduction =
@@ -143,6 +144,7 @@ const isProduction =
     CommunicationModule,
     ExpensesModule,
     MarketingModule,
+    GuardianAccessModule,
   ],
   controllers: [AppController, RootHealthController],
   providers: [
