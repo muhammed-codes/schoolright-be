@@ -120,6 +120,7 @@ enum AttendanceStatus {
 }
 
 type AttendanceSummary {
+  attendancePercentage: Float!
   daysAbsent: Int!
   daysLate: Int!
   daysPresent: Int!
@@ -1400,6 +1401,123 @@ enum GuardianConditionOperator {
   NOT_IN
 }
 
+type GuardianDashboard {
+  announcements: [GuardianDashboardAnnouncement!]!
+  attendance: GuardianDashboardAttendance
+  attentionItems: [GuardianDashboardAttentionItem!]!
+  fees: GuardianDashboardFees
+  generatedAt: DateTime!
+  guardian: GuardianDashboardGuardian!
+  result: GuardianDashboardResult
+  sectionStates: [GuardianDashboardSectionState!]!
+  student: GuardianDashboardStudent!
+  term: GuardianDashboardTerm!
+  timetable: [GuardianDashboardTimetableEntry!]!
+}
+
+type GuardianDashboardAnnouncement {
+  audience: AnnouncementAudience!
+  bodyPreview: String!
+  id: String!
+  publishedAt: DateTime
+  title: String!
+}
+
+type GuardianDashboardAttendance {
+  attendancePercentage: Float!
+  daysAbsent: Int!
+  daysLate: Int!
+  daysPresent: Int!
+  totalMarkedDays: Int!
+}
+
+type GuardianDashboardAttentionItem {
+  amount: Float
+  description: String!
+  id: String!
+  occurredAt: DateTime
+  status: GuardianDashboardAttentionStatus!
+  target: String
+  title: String!
+  type: GuardianDashboardAttentionType!
+}
+
+enum GuardianDashboardAttentionStatus {
+  ACTION_REQUIRED
+  INFO
+  PENDING
+}
+
+enum GuardianDashboardAttentionType {
+  ANNOUNCEMENT
+  FEES
+  PAYMENT
+  RESULT
+}
+
+type GuardianDashboardFees {
+  outstandingBalance: Int!
+  paymentPercentage: Float!
+  status: InvoiceStatus!
+  totalAmount: Int!
+  totalPaid: Int!
+}
+
+type GuardianDashboardGuardian {
+  avatarUrl: String
+  fullName: String!
+  id: String!
+}
+
+type GuardianDashboardResult {
+  grade: String
+  id: String!
+  percentage: Float
+  position: Int
+  publishedAt: DateTime
+  sessionName: String
+  termName: String
+}
+
+type GuardianDashboardSectionState {
+  available: Boolean!
+  permissionDenied: Boolean!
+  sectionName: String!
+  unavailableReason: String
+}
+
+type GuardianDashboardStudent {
+  admissionNumber: String!
+  avatarUrl: String
+  className: String
+  fullName: String!
+  id: String!
+}
+
+type GuardianDashboardTerm {
+  endDate: String!
+  id: String!
+  name: String!
+  sessionName: String
+  startDate: String!
+}
+
+type GuardianDashboardTimetableEntry {
+  dayOfWeek: Int!
+  endTime: String!
+  id: String!
+  startTime: String!
+  status: GuardianDashboardTimetableStatus
+  subjectName: String!
+  teacherName: String
+}
+
+enum GuardianDashboardTimetableStatus {
+  COMPLETED
+  CURRENT
+  UPCOMING
+}
+
 enum GuardianDecisionSource {
   DEFAULT_DENY
   DYNAMIC_SEGMENT
@@ -2208,6 +2326,7 @@ type Query {
   guardianAccessExceptionsForStudent(schoolId: String, studentId: String!): [GuardianAccessException!]!
   guardianAccessPolicies(schoolId: String): [GuardianAccessPolicy!]!
   guardianAccessPolicy(id: String!): GuardianAccessPolicy!
+  guardianDashboard(studentId: String!, termId: String): GuardianDashboard!
   guardianStudents(guardianId: String!): [Student!]!
 
   """Get an ID card template by ID or key"""
@@ -2632,6 +2751,7 @@ type School {
   schoolType: String!
   stampUrl: String
   state: String
+  timezone: String!
   uniqueQrCode: String!
   updatedAt: DateTime!
   verificationStatus: String
