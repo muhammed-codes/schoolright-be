@@ -23,10 +23,15 @@ const createApp = async () => {
     }),
   );
 
+  const defaultOrigins = ['https://portal.schoolright.com.ng'];
+
   const allowedOrigins = [
     process.env.FRONTEND_URL,
+    ...defaultOrigins,
     ...(process.env.CORS_ALLOWED_ORIGINS || '').split(','),
-  ].filter(Boolean) as string[];
+  ]
+    .map((origin) => origin?.trim())
+    .filter(Boolean) as string[];
 
   const isOriginAllowed = (origin?: string): boolean => {
     if (!origin) return true;
