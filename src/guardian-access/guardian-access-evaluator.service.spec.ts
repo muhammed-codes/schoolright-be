@@ -189,6 +189,38 @@ describe('guardian access evaluator', () => {
     expect(decision.policyId).toBe('tie-deny');
   });
 
+  it('does not discard a satisfied OR policy when another metric is unavailable', () => {
+    const orCondition = {
+      type: GuardianConditionNodeType.GROUP,
+      combinator: GuardianConditionCombinator.OR,
+      conditions: [
+        {
+          type: GuardianConditionNodeType.CONDITION,
+          field: GuardianConditionField.STUDENT_STATUS,
+          operator: GuardianConditionOperator.EQUALS,
+          value: StudentStatus.ACTIVE,
+        },
+        {
+          type: GuardianConditionNodeType.CONDITION,
+          field: GuardianConditionField.FEE_PAYMENT_PERCENTAGE,
+          operator: GuardianConditionOperator.GREATER_THAN_OR_EQUAL,
+          value: 50,
+        },
+      ],
+    };
+    const decision = evaluator.evaluate({
+      ...baseInput,
+      metrics: {
+        ...baseInput.metrics,
+        feePaymentPercentage: undefined,
+        unavailable: { feePaymentPercentage: 'No invoices' },
+      },
+      policies: [policy({ condition: orCondition })],
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.sourceType).toBe(GuardianDecisionSource.SCHOOL_DEFAULT);
+  });
+
   it('falls back to school default then secure deny', () => {
     const withDefault = evaluator.evaluate({
       ...baseInput,

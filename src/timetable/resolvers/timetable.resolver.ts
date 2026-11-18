@@ -5,6 +5,11 @@ import { CurrentUser, RequirePermission, Roles } from '../../common/decorators';
 import { AppResource } from '../../access/enums/resource.enum';
 import { PermissionAction } from '../../access/enums/permission-action.enum';
 import { UserRole } from '../../common/enums/role.enum';
+import { GuardianEnforcementService } from '../../guardian-access/services/guardian-enforcement.service';
+import {
+  GuardianAction,
+  GuardianResource,
+} from '../../guardian-access/enums/guardian-permission.enums';
 import { Room } from '../entities/room.entity';
 import { SchoolDay } from '../entities/school-day.entity';
 import { Period } from '../entities/period.entity';
@@ -59,7 +64,10 @@ const ADMIN_ROLES = [
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
 export class TimetableResolver {
-  constructor(private readonly timetableService: TimetableService) {}
+  constructor(
+    private readonly timetableService: TimetableService,
+    private readonly guardianEnforcement: GuardianEnforcementService,
+  ) {}
 
   // ══════════════════════════════════════════════════════════════════════════
   // ROOMS (Admin Only)
@@ -533,11 +541,20 @@ export class TimetableResolver {
   @Query(() => ChildTimetableResult)
   @UseGuards(JwtAuthGuard)
   @RequirePermission(AppResource.TIMETABLE, PermissionAction.READ)
-  childTimetable(
+  async childTimetable(
     @Args('studentId') studentId: string,
     @Args('termId', { nullable: true }) termId?: string,
     @CurrentUser() user?: { sub: string; role: UserRole; schoolId: string },
   ) {
+    if (user?.role === UserRole.PARENT) {
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        studentId,
+        GuardianResource.TIMETABLE,
+        GuardianAction.VIEW,
+      );
+    }
     return this.timetableService.getChildTimetable(
       studentId,
       user!.sub,
@@ -550,15 +567,24 @@ export class TimetableResolver {
   @Query(() => [ChildTimetableResult])
   @UseGuards(JwtAuthGuard)
   @RequirePermission(AppResource.TIMETABLE, PermissionAction.READ)
-  myChildrenTimetables(
+  async myChildrenTimetables(
     @Args('termId', { nullable: true }) termId?: string,
-    @CurrentUser() user?: { sub: string; schoolId: string },
+    @CurrentUser() user?: { sub: string; schoolId: string; role: UserRole },
   ) {
-    return this.timetableService.getMyChildrenTimetables(
+    const timetables = await this.timetableService.getMyChildrenTimetables(
       user!.sub,
       user!.schoolId,
       termId,
     );
+    if (user?.role !== UserRole.PARENT) return timetables;
+    const allowed = await this.guardianEnforcement.getAllowedChildren(
+      user.sub,
+      user.schoolId,
+      GuardianResource.TIMETABLE,
+      GuardianAction.VIEW,
+    );
+    const allowedIds = new Set(allowed.map((child) => child.studentId));
+    return timetables.filter((item) => allowedIds.has(item.student.id));
   }
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -20,12 +20,20 @@ import {
   TEACHER_ROLES,
 } from '../common/constants/roles.constant';
 import { PaginationArgs, createPaginatedType } from '../common/pagination';
+import { GuardianEnforcementService } from '../guardian-access/services/guardian-enforcement.service';
+import {
+  GuardianAction,
+  GuardianResource,
+} from '../guardian-access/enums/guardian-permission.enums';
 
 const PaginatedStudent = createPaginatedType(Student);
 
 @Resolver(() => Student)
 export class StudentsResolver {
-  constructor(private readonly studentsService: StudentsService) {}
+  constructor(
+    private readonly studentsService: StudentsService,
+    private readonly guardianEnforcement: GuardianEnforcementService,
+  ) {}
 
   @Query(() => [Student])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
@@ -41,11 +49,18 @@ export class StudentsResolver {
   @Query(() => Student, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
-  student(
+  async student(
     @Args('id') id: string,
     @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
     if (user.role === UserRole.PARENT) {
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        id,
+        GuardianResource.CHILD_PROFILE,
+        GuardianAction.VIEW,
+      );
       return this.studentsService.getLinkedStudentById(
         id,
         user.sub,
@@ -75,8 +90,19 @@ export class StudentsResolver {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @Roles(UserRole.PARENT)
   @RequirePermission(AppResource.STUDENTS, PermissionAction.READ)
-  myChildren(@CurrentUser() user: { sub: string; schoolId: string }) {
-    return this.studentsService.getStudentsByParent(user.sub, user.schoolId);
+  async myChildren(@CurrentUser() user: { sub: string; schoolId: string }) {
+    const children = await this.studentsService.getStudentsByParent(
+      user.sub,
+      user.schoolId,
+    );
+    const allowed = await this.guardianEnforcement.getAllowedChildren(
+      user.sub,
+      user.schoolId,
+      GuardianResource.CHILD_PROFILE,
+      GuardianAction.VIEW,
+    );
+    const allowedIds = new Set(allowed.map((child) => child.studentId));
+    return children.filter((child) => allowedIds.has(child.id));
   }
 
   @Query(() => [Student])

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Student } from '../students/entities/student.entity';
 import { StudentParent } from '../students/entities/student-parent.entity';
@@ -22,6 +22,7 @@ import { GuardianPolicyManagementService } from './services/guardian-policy-mana
 import { GuardianPolicyPreviewService } from './services/guardian-policy-preview.service';
 import { GuardianPolicyRuleService } from './services/guardian-policy-rule.service';
 
+@Global()
 @Module({
   imports: [
     TypeOrmModule.forFeature([

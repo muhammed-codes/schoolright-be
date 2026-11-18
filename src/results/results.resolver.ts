@@ -17,12 +17,35 @@ import { JwtAuthGuard, RolesGuard, PermissionGuard } from '../common/guards';
 import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { UserRole, ResultStatus } from '../common/enums';
 import { SCHOOL_STAFF_ROLES } from '../common/constants/roles.constant';
+import { GuardianEnforcementService } from '../guardian-access/services/guardian-enforcement.service';
+import {
+  GuardianAction,
+  GuardianResource,
+} from '../guardian-access/enums/guardian-permission.enums';
 
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
 @Roles(...SCHOOL_STAFF_ROLES)
 export class ResultsResolver {
-  constructor(private readonly resultsService: ResultsService) {}
+  constructor(
+    private readonly resultsService: ResultsService,
+    private readonly guardianEnforcement: GuardianEnforcementService,
+  ) {}
+
+  private assertParentResultAccess = async (
+    studentId: string,
+    user: { sub: string; schoolId: string; role: UserRole },
+  ) => {
+    if (user.role === UserRole.PARENT) {
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        studentId,
+        GuardianResource.RESULTS,
+        GuardianAction.VIEW,
+      );
+    }
+  };
 
   @Query(() => ResultSheet)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
@@ -191,11 +214,12 @@ export class ResultsResolver {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.RESULTS, PermissionAction.READ)
-  studentResult(
+  async studentResult(
     @Args('studentId') studentId: string,
     @Args('termId') termId: string,
     @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
+    await this.assertParentResultAccess(studentId, user);
     return this.resultsService.getStudentResult(
       studentId,
       termId,
@@ -241,10 +265,11 @@ export class ResultsResolver {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.RESULTS, PermissionAction.READ)
-  myChildResults(
+  async myChildResults(
     @Args('studentId') studentId: string,
     @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
+    await this.assertParentResultAccess(studentId, user);
     return this.resultsService.getMyChildResults(
       studentId,
       user.sub,

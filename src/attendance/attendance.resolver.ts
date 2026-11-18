@@ -24,12 +24,35 @@ import {
   TEACHER_ROLES,
 } from '../common/constants/roles.constant';
 import { ForbiddenException } from '@nestjs/common';
+import { GuardianEnforcementService } from '../guardian-access/services/guardian-enforcement.service';
+import {
+  GuardianAction,
+  GuardianResource,
+} from '../guardian-access/enums/guardian-permission.enums';
 
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
 @Roles(...SCHOOL_STAFF_ROLES)
 export class AttendanceResolver {
-  constructor(private readonly attendanceService: AttendanceService) {}
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly guardianEnforcement: GuardianEnforcementService,
+  ) {}
+
+  private assertParentAttendanceAccess = async (
+    studentId: string,
+    user: { sub: string; role: UserRole; schoolId: string },
+  ) => {
+    if (user.role === UserRole.PARENT) {
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        studentId,
+        GuardianResource.ATTENDANCE,
+        GuardianAction.VIEW,
+      );
+    }
+  };
 
   @Query(() => [StudentAttendance])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
@@ -52,11 +75,12 @@ export class AttendanceResolver {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
-  studentAttendance(
+  async studentAttendance(
     @Args('studentId') studentId: string,
     @Args('termId') termId: string,
     @CurrentUser() user: { sub: string; role: UserRole; schoolId: string },
   ) {
+    await this.assertParentAttendanceAccess(studentId, user);
     return this.attendanceService.getStudentAttendance(
       studentId,
       termId,
@@ -70,11 +94,12 @@ export class AttendanceResolver {
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @Roles(UserRole.PARENT, ...SCHOOL_STAFF_ROLES)
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
-  studentAttendanceSummary(
+  async studentAttendanceSummary(
     @Args('studentId') studentId: string,
     @Args('termId') termId: string,
     @CurrentUser() user: { sub: string; role: UserRole; schoolId: string },
   ) {
+    await this.assertParentAttendanceAccess(studentId, user);
     return this.attendanceService.getStudentAttendanceSummary(
       studentId,
       termId,

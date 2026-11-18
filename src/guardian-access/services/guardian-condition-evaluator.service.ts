@@ -46,7 +46,15 @@ export class GuardianConditionEvaluator {
         ? childResults.every((result) => result.matched) &&
           unavailableReasons.length === 0
         : childResults.some((result) => result.matched);
-    return { matched, unavailableReasons, details };
+    const effectiveUnavailableReasons =
+      node.combinator === GuardianConditionCombinator.OR && matched
+        ? []
+        : unavailableReasons;
+    return {
+      matched,
+      unavailableReasons: effectiveUnavailableReasons,
+      details,
+    };
   };
 
   private evaluateLeaf = (

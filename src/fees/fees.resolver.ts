@@ -1,6 +1,10 @@
 import { FeeClassLookup, FeeStudentLookup } from './dto/fee-directory.type';
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UseGuards,
+} from '@nestjs/common';
 
 import { FeesService } from './fees.service';
 import { FeeCategory } from './entities/fee-category.entity';
@@ -27,6 +31,11 @@ import { UserRole } from '../common/enums';
 import { AppResource } from '../access/enums/resource.enum';
 import { PermissionAction } from '../access/enums/permission-action.enum';
 import { PaginationArgs, createPaginatedType } from '../common/pagination';
+import { GuardianEnforcementService } from '../guardian-access/services/guardian-enforcement.service';
+import {
+  GuardianAction,
+  GuardianResource,
+} from '../guardian-access/enums/guardian-permission.enums';
 
 const PaginatedPaymentSubmissionBatch = createPaginatedType(
   PaymentSubmissionBatch,
@@ -82,7 +91,10 @@ type AuthUser = { sub: string; schoolId: string; role: UserRole };
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
 @Roles(...STAFF_ROLES)
 export class FeesResolver {
-  constructor(private readonly feesService: FeesService) {}
+  constructor(
+    private readonly feesService: FeesService,
+    private readonly guardianEnforcement: GuardianEnforcementService,
+  ) {}
 
   @Query(() => [FeeClassLookup])
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
@@ -279,7 +291,20 @@ export class FeesResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
-  bankAccounts(@CurrentUser() user: AuthUser) {
+  async bankAccounts(@CurrentUser() user: AuthUser) {
+    if (user.role === UserRole.PARENT) {
+      const allowed = await this.guardianEnforcement.getAllowedChildren(
+        user.sub,
+        user.schoolId,
+        GuardianResource.FEES,
+        GuardianAction.VIEW,
+      );
+      if (!allowed.length) {
+        throw new ForbiddenException(
+          'Guardian policy does not allow fee access for any linked child',
+        );
+      }
+    }
     return this.feesService.getBankAccounts(user.schoolId);
   }
 
@@ -324,13 +349,23 @@ export class FeesResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
-  invoice(@Args('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.feesService.getInvoiceById(
+  async invoice(@Args('id') id: string, @CurrentUser() user: AuthUser) {
+    const invoice = await this.feesService.getInvoiceById(
       id,
       user.schoolId,
       user.sub,
       user.role,
     );
+    if (user.role === UserRole.PARENT) {
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        invoice.studentId,
+        GuardianResource.INVOICES,
+        GuardianAction.VIEW,
+      );
+    }
+    return invoice;
   }
 
   @Query(() => PaginatedStudentInvoice)
@@ -375,10 +410,19 @@ export class FeesResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
-  myStudentInvoices(
+  async myStudentInvoices(
     @Args('studentId') studentId: string,
     @CurrentUser() user: AuthUser,
   ) {
+    if (user.role === UserRole.PARENT) {
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        studentId,
+        GuardianResource.INVOICES,
+        GuardianAction.VIEW,
+      );
+    }
     return this.feesService.getStudentInvoicesForUser(
       studentId,
       user.sub,
@@ -442,10 +486,23 @@ export class FeesResolver {
   @Mutation(() => PaymentSubmissionBatch)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PARENT)
-  submitPaymentBatch(
+  async submitPaymentBatch(
     @Args('input') input: SubmitPaymentBatchInput,
     @CurrentUser() user: AuthUser,
   ) {
+    if (user.role === UserRole.PARENT) {
+      await Promise.all(
+        input.shares.map((share) =>
+          this.guardianEnforcement.assertPermission(
+            user.sub,
+            user.schoolId,
+            share.studentId,
+            GuardianResource.PAYMENT_SUBMISSION,
+            GuardianAction.SUBMIT,
+          ),
+        ),
+      );
+    }
     return this.feesService.submitPaymentBatch(input, user.schoolId, user.sub);
   }
 
@@ -453,35 +510,87 @@ export class FeesResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
-  paymentSubmission(@Args('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.feesService.getPaymentSubmissionById(
+  async paymentSubmission(
+    @Args('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const batch = await this.feesService.getPaymentSubmissionById(
       id,
       user.schoolId,
       user.sub,
       user.role,
     );
+    if (user.role === UserRole.PARENT) {
+      const allowed = await this.getAllowedPaymentHistoryStudents(user);
+      if ((batch.shares ?? []).some((share) => !allowed.has(share.studentId))) {
+        throw new ForbiddenException(
+          'Guardian policy does not allow access to this payment submission',
+        );
+      }
+    }
+    return batch;
   }
 
   @Query(() => [PaymentSubmissionBatch])
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PARENT)
-  myPaymentSubmissions(@CurrentUser() user: AuthUser) {
-    return this.feesService.getParentSubmissions(user.sub, user.schoolId);
+  async myPaymentSubmissions(@CurrentUser() user: AuthUser) {
+    const batches = await this.feesService.getParentSubmissions(
+      user.sub,
+      user.schoolId,
+    );
+    return this.filterParentPaymentHistory(batches, user);
   }
 
   @Query(() => PaginatedPaymentSubmissionBatch)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PARENT)
-  myPaymentSubmissionsPage(
+  async myPaymentSubmissionsPage(
     @Args() pagination: PaginationArgs,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.feesService.getParentSubmissionsPaginated(
+    if (user.role !== UserRole.PARENT) {
+      return this.feesService.getParentSubmissionsPaginated(
+        user.sub,
+        user.schoolId,
+        pagination,
+      );
+    }
+    const batches = await this.filterParentPaymentHistory(
+      await this.feesService.getParentSubmissions(user.sub, user.schoolId),
+      user,
+    );
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 50;
+    const skip = (page - 1) * limit;
+    return {
+      items: batches.slice(skip, skip + limit),
+      total: batches.length,
+      page,
+      totalPages: Math.ceil(batches.length / limit),
+    };
+  }
+
+  private getAllowedPaymentHistoryStudents = async (user: AuthUser) => {
+    const allowed = await this.guardianEnforcement.getAllowedChildren(
       user.sub,
       user.schoolId,
-      pagination,
+      GuardianResource.PAYMENT_HISTORY,
+      GuardianAction.VIEW,
     );
-  }
+    return new Set(allowed.map((child) => child.studentId));
+  };
+
+  private filterParentPaymentHistory = async (
+    batches: PaymentSubmissionBatch[],
+    user: AuthUser,
+  ) => {
+    if (user.role !== UserRole.PARENT) return batches;
+    const allowed = await this.getAllowedPaymentHistoryStudents(user);
+    return batches.filter((batch) =>
+      (batch.shares ?? []).every((share) => allowed.has(share.studentId)),
+    );
+  };
 
   // ─── Approval Queue ────────────────────────────────────────────────────────
 
@@ -577,10 +686,23 @@ export class FeesResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
-  paymentReceipt(
+  async paymentReceipt(
     @Args('shareId') shareId: string,
     @CurrentUser() user: AuthUser,
   ) {
+    if (user.role === UserRole.PARENT) {
+      const share = await this.feesService.getShareById(shareId);
+      if (!share || share.batch?.schoolId !== user.schoolId) {
+        throw new NotFoundException('Receipt not found');
+      }
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        share.studentId,
+        GuardianResource.RECEIPTS,
+        GuardianAction.VIEW,
+      );
+    }
     return this.feesService.getReceipt(
       shareId,
       user.sub,
