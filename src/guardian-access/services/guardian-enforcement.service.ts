@@ -11,10 +11,15 @@ import { StudentParent } from '../../students/entities/student-parent.entity';
 import { User } from '../../users/entities/user.entity';
 import { GuardianAccessException } from '../entities/guardian-access-exception.entity';
 import { GuardianAccessPolicy } from '../entities/guardian-access-policy.entity';
+import { GuardianAccessPolicyRule } from '../entities/guardian-access-policy-rule.entity';
 import {
   GuardianAction,
   GuardianResource,
 } from '../enums/guardian-permission.enums';
+import {
+  GuardianEffect,
+  GuardianPolicyScope,
+} from '../enums/guardian-policy.enums';
 import { GuardianFeeMetricScope } from '../enums/guardian-condition.enums';
 import {
   GuardianEvaluateInput,
@@ -54,11 +59,7 @@ export class GuardianEnforcementService {
       where: { studentId, parentId: guardianId },
     });
     const [policies, exceptions, metrics] = await Promise.all([
-      this.policyRepo.find({
-        where: { schoolId },
-        relations: ['rules'],
-        order: { priority: 'DESC' },
-      }),
+      this.loadSchoolPolicies(schoolId),
       this.exceptionRepo.find({ where: { schoolId, studentId } }),
       this.buildMetrics(student, schoolId),
     ]);
@@ -94,6 +95,43 @@ export class GuardianEnforcementService {
     if (!decision.allowed) {
       throw new ForbiddenException(decision.reason);
     }
+  };
+
+  getAllowedChildren = async (
+    guardianId: string,
+    schoolId: string,
+    resource: GuardianResource,
+    action: GuardianAction,
+  ): Promise<Array<{ studentId: string; classId: string | null }>> => {
+    const links = await this.studentParentRepo.find({
+      where: { parentId: guardianId },
+      relations: ['student'],
+    });
+    const students = links
+      .map((link) => link.student)
+      .filter((student): student is Student =>
+        Boolean(
+          student && student.schoolId === schoolId && !student.isArchived,
+        ),
+      );
+    const decisions = await Promise.all(
+      students.map(async (student) => ({
+        student,
+        decision: await this.getDecision(
+          guardianId,
+          schoolId,
+          student.id,
+          resource,
+          action,
+        ),
+      })),
+    );
+    return decisions
+      .filter(({ decision }) => decision.allowed)
+      .map(({ student }) => ({
+        studentId: student.id,
+        classId: student.currentClassId ?? null,
+      }));
   };
 
   snapshot = async (guardianId: string, schoolId: string) => {
@@ -148,11 +186,7 @@ export class GuardianEnforcementService {
   ) => {
     const metrics = await this.buildMetrics(student, schoolId);
     const [policies, exceptions] = await Promise.all([
-      this.policyRepo.find({
-        where: { schoolId },
-        relations: ['rules'],
-        order: { priority: 'DESC' },
-      }),
+      this.loadSchoolPolicies(schoolId),
       this.exceptionRepo.find({ where: { schoolId, studentId: student.id } }),
     ]);
     const permissions = Object.values(GuardianResource).flatMap((resource) =>
@@ -224,5 +258,59 @@ export class GuardianEnforcementService {
     });
     if (!student) throw new NotFoundException('Student not found');
     return student;
+  };
+
+  private loadSchoolPolicies = async (
+    schoolId: string,
+  ): Promise<GuardianAccessPolicy[]> => {
+    let policies = await this.policyRepo.find({
+      where: { schoolId },
+      relations: ['rules'],
+      order: { priority: 'DESC' },
+    });
+    if (policies.length === 0) {
+      policies = await this.seedDefaultPolicy(schoolId);
+    }
+    return policies;
+  };
+
+  private seedDefaultPolicy = async (
+    schoolId: string,
+  ): Promise<GuardianAccessPolicy[]> => {
+    const admin = await this.userRepo.findOne({
+      where: [{ schoolId, role: UserRole.SCHOOL_ADMIN }, { schoolId }],
+    });
+    if (!admin) return [];
+
+    const resources = Object.values(GuardianResource);
+    const policy = this.policyRepo.create({
+      schoolId,
+      name: 'School Default Access Policy',
+      description:
+        'Default policy granting linked guardians standard view and payment access.',
+      scope: GuardianPolicyScope.SCHOOL_DEFAULT,
+      enabled: true,
+      priority: 0,
+      createdById: admin.id,
+      updatedById: admin.id,
+    });
+    const saved = await this.policyRepo.save(policy);
+    const ruleRepo = this.policyRepo.manager.getRepository(
+      GuardianAccessPolicyRule,
+    );
+    const rules = resources.map((res) => {
+      const action =
+        res === GuardianResource.PAYMENT_SUBMISSION
+          ? GuardianAction.SUBMIT
+          : GuardianAction.VIEW;
+      return ruleRepo.create({
+        policyId: saved.id,
+        resource: res,
+        action,
+        effect: GuardianEffect.ALLOW,
+      });
+    });
+    saved.rules = await ruleRepo.save(rules);
+    return [saved];
   };
 }
