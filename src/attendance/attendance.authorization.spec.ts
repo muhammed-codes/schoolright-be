@@ -108,4 +108,30 @@ describe('AttendanceService parent access', () => {
       ),
     ).rejects.toThrow('Term not found');
   });
+
+  it('computes attendance percentage from present and late days', async () => {
+    const { service, studentAttendanceRepo } = scope();
+    studentAttendanceRepo.find.mockResolvedValue([
+      { status: 'present' },
+      { status: 'late' },
+      { status: 'absent' },
+      { status: 'absent' },
+    ]);
+
+    const summary = await service.getStudentAttendanceSummary(
+      'student-a',
+      'term-a',
+      'parent-a',
+      UserRole.PARENT,
+      'school-a',
+    );
+
+    expect(summary).toMatchObject({
+      attendancePercentage: 50,
+      daysPresent: 1,
+      daysLate: 1,
+      daysAbsent: 2,
+      totalMarkedDays: 4,
+    });
+  });
 });

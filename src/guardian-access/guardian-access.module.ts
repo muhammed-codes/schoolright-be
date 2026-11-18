@@ -54,6 +54,7 @@ import { GuardianPolicyRuleService } from './services/guardian-policy-rule.servi
   exports: [
     GuardianAccessEvaluator,
     GuardianEnforcementService,
+    GuardianFeeMetricService,
     GuardianPolicyPreviewService,
   ],
 })

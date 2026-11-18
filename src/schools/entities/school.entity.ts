@@ -52,6 +52,10 @@ export class School extends BaseEntity {
   schoolStartTime!: string;
 
   @Field()
+  @Column({ default: 'Africa/Lagos' })
+  timezone!: string;
+
+  @Field()
   @Column({ default: true })
   isActive!: boolean;
 

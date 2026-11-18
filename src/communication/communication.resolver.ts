@@ -1,10 +1,8 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { CommunicationService } from './communication.service';
-import {
-  Announcement,
-  AnnouncementAudience,
-} from './entities/announcement.entity';
+import { filterAnnouncementsForGuardian } from './communication.guardian-filter';
+import { Announcement } from './entities/announcement.entity';
 import {
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
@@ -51,14 +49,7 @@ export class CommunicationResolver {
         .map((child) => child.classId)
         .filter((id): id is string => Boolean(id)),
     );
-    return announcements.filter(
-      (announcement) =>
-        announcement.audience === AnnouncementAudience.SCHOOL ||
-        announcement.audience === AnnouncementAudience.GUARDIANS ||
-        (announcement.audience === AnnouncementAudience.CLASS &&
-          Boolean(announcement.targetClassId) &&
-          classIds.has(announcement.targetClassId!)),
-    );
+    return filterAnnouncementsForGuardian(announcements, classIds);
   };
 
   @Query(() => Announcement, { nullable: true })

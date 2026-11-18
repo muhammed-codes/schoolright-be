@@ -253,11 +253,23 @@ export class AttendanceService {
             if (record.status === AttendanceStatus.LATE) daysLate++;
           });
 
+          const totalMarkedDays = records.length;
+          const attendancePercentage =
+            totalMarkedDays === 0
+              ? 0
+              : Number(
+                  Math.min(
+                    100,
+                    ((daysPresent + daysLate) / totalMarkedDays) * 100,
+                  ).toFixed(1),
+                );
+
           return {
+            attendancePercentage,
             daysPresent,
             daysAbsent,
             daysLate,
-            totalMarkedDays: records.length,
+            totalMarkedDays,
           };
         }),
     );

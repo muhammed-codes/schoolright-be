@@ -23,5 +23,6 @@ import { CommunicationService } from './communication.service';
     NotificationsModule,
   ],
   providers: [CommunicationResolver, CommunicationService],
+  exports: [CommunicationService],
 })
 export class CommunicationModule {}

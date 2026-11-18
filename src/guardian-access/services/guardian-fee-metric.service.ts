@@ -4,9 +4,22 @@ import { IsNull, Repository } from 'typeorm';
 import { TermStatus } from '../../common/enums';
 import { Session } from '../../terms/entities/session.entity';
 import { Term } from '../../terms/entities/term.entity';
-import { StudentInvoice } from '../../fees/entities/student-invoice.entity';
+import {
+  InvoiceStatus,
+  StudentInvoice,
+} from '../../fees/entities/student-invoice.entity';
 import { GuardianFeeMetricScope } from '../enums/guardian-condition.enums';
 import { GuardianStudentMetrics } from '../interfaces/guardian-condition.interface';
+
+export interface GuardianFeeMetric {
+  feePaymentPercentage?: number;
+  totalAmount?: number;
+  totalPaid?: number;
+  outstandingBalance?: number;
+  paymentPercentage?: number;
+  status?: InvoiceStatus;
+  unavailable: GuardianStudentMetrics['unavailable'];
+}
 
 @Injectable()
 export class GuardianFeeMetricService {
@@ -23,11 +36,7 @@ export class GuardianFeeMetricService {
     studentId: string,
     schoolId: string,
     scope: GuardianFeeMetricScope = GuardianFeeMetricScope.ACTIVE_TERM_AND_SESSION_INVOICES,
-  ): Promise<{
-    feePaymentPercentage?: number;
-    outstandingBalance?: number;
-    unavailable: GuardianStudentMetrics['unavailable'];
-  }> => {
+  ): Promise<GuardianFeeMetric> => {
     if (scope !== GuardianFeeMetricScope.ACTIVE_TERM_AND_SESSION_INVOICES) {
       throw new BadRequestException('Unsupported fee metric scope');
     }
@@ -83,11 +92,22 @@ export class GuardianFeeMetricService {
         },
       };
     }
+    const paymentPercentage = Number(
+      ((totalPaid / totalAmount) * 100).toFixed(2),
+    );
+    const status =
+      outstandingBalance <= 0
+        ? InvoiceStatus.PAID
+        : totalPaid > 0
+          ? InvoiceStatus.PARTIALLY_PAID
+          : InvoiceStatus.OPEN;
     return {
-      feePaymentPercentage: Number(
-        ((totalPaid / totalAmount) * 100).toFixed(2),
-      ),
+      feePaymentPercentage: paymentPercentage,
+      totalAmount,
+      totalPaid,
       outstandingBalance,
+      paymentPercentage,
+      status,
       unavailable: {},
     };
   };

@@ -1,4 +1,4 @@
-import { InputType, Field, ObjectType, Int } from '@nestjs/graphql';
+import { InputType, Field, Float, ObjectType, Int } from '@nestjs/graphql';
 import {
   IsNotEmpty,
   IsEnum,
@@ -64,6 +64,9 @@ export class ManualStaffAttendanceInput {
 
 @ObjectType()
 export class AttendanceSummary {
+  @Field(() => Float)
+  attendancePercentage: number;
+
   @Field(() => Int)
   daysPresent: number;
 

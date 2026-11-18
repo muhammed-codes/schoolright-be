@@ -1,6 +1,9 @@
 import { Repository } from 'typeorm';
 import { TermStatus } from '../common/enums';
-import { StudentInvoice } from '../fees/entities/student-invoice.entity';
+import {
+  InvoiceStatus,
+  StudentInvoice,
+} from '../fees/entities/student-invoice.entity';
 import { Session } from '../terms/entities/session.entity';
 import { Term } from '../terms/entities/term.entity';
 import { GuardianFeeMetricService } from './services/guardian-fee-metric.service';
@@ -42,6 +45,10 @@ describe('guardian fee metric service', () => {
     const result = await service.calculateForStudent('student-a', 'school-a');
     expect(result.feePaymentPercentage).toBe(50);
     expect(result.outstandingBalance).toBe(1500);
+    expect(result.totalAmount).toBe(3000);
+    expect(result.totalPaid).toBe(1500);
+    expect(result.paymentPercentage).toBe(50);
+    expect(result.status).toBe(InvoiceStatus.PARTIALLY_PAID);
     expect(result.unavailable).toEqual({});
     expect(findInvoices).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -71,5 +78,24 @@ describe('guardian fee metric service', () => {
     const { service } = buildService([], null);
     const result = await service.calculateForStudent('student-a', 'school-a');
     expect(result.unavailable.outstandingBalance).toContain('No active term');
+  });
+
+  it('derives a paid status when invoices are fully settled', async () => {
+    const { service } = buildService([
+      { totalAmount: 1000, totalPaid: 1000, balance: 0 },
+    ]);
+    const result = await service.calculateForStudent('student-a', 'school-a');
+    expect(result.status).toBe(InvoiceStatus.PAID);
+    expect(result.paymentPercentage).toBe(100);
+    expect(result.outstandingBalance).toBe(0);
+  });
+
+  it('derives an open status when no payment has been made', async () => {
+    const { service } = buildService([
+      { totalAmount: 1000, totalPaid: 0, balance: 1000 },
+    ]);
+    const result = await service.calculateForStudent('student-a', 'school-a');
+    expect(result.status).toBe(InvoiceStatus.OPEN);
+    expect(result.paymentPercentage).toBe(0);
   });
 });
