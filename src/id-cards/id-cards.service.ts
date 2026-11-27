@@ -8,7 +8,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, IsNull } from 'typeorm';
 import * as QRCode from 'qrcode';
 
 import { User } from '../users/entities/user.entity';
@@ -52,7 +52,15 @@ import {
   GenerateStaffIdCardPdfInput,
   GenerateBatchStudentIdCardsPdfInput,
   GenerateBatchStaffIdCardsPdfInput,
+  CreateIdCardTemplateInput,
+  UpdateIdCardTemplateInput,
+  PreviewIdCardInput,
 } from './dto/id-card.dto';
+import {
+  renderCustomIdCardFront,
+  renderCustomIdCardBack,
+  parseDesignConfiguration,
+} from './templates/custom-id-card.template';
 
 @Injectable()
 export class IdCardsService implements OnModuleInit {
@@ -114,17 +122,273 @@ export class IdCardsService implements OnModuleInit {
   };
 
   /**
-   * Get all active templates, optionally filtered by cardType.
+   * Get all active templates, optionally filtered by cardType and scoped by schoolId.
    */
-  getTemplates = async (cardType?: IdCardType): Promise<IdCardTemplate[]> => {
-    const where: Record<string, unknown> = { isActive: true };
-    if (cardType) {
-      where.cardType = cardType;
+  getTemplates = async (
+    cardType?: IdCardType,
+    schoolId?: string,
+  ): Promise<IdCardTemplate[]> => {
+    if (typeof this.templateRepo.createQueryBuilder === 'function') {
+      const query = this.templateRepo
+        .createQueryBuilder('t')
+        .where('t.isActive = true');
+
+      if (cardType) {
+        query.andWhere('t.cardType = :cardType', { cardType });
+      }
+
+      if (schoolId) {
+        query.andWhere('(t.schoolId IS NULL OR t.schoolId = :schoolId)', {
+          schoolId,
+        });
+      } else {
+        query.andWhere('t.schoolId IS NULL');
+      }
+
+      return query
+        .orderBy('t.isSystemDefault', 'DESC')
+        .addOrderBy('t.createdAt', 'ASC')
+        .getMany();
     }
+
+    const where: any = { isActive: true };
+    if (cardType) where.cardType = cardType;
     return this.templateRepo.find({
       where,
       order: { isSystemDefault: 'DESC', createdAt: 'ASC' },
     });
+  };
+
+  createCustomTemplate = async (
+    schoolId: string,
+    input: CreateIdCardTemplateInput,
+  ): Promise<IdCardTemplate> => {
+    const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const tpl = this.templateRepo.create({
+      schoolId,
+      key,
+      name: input.name,
+      description: input.description || 'Custom ID Card Design',
+      cardType: input.cardType || IdCardType.STUDENT,
+      orientation: input.orientation || IdCardOrientation.PORTRAIT,
+      widthMm: input.widthMm ?? 53.98,
+      heightMm: input.heightMm ?? 85.6,
+      version: '1.0.0',
+      isActive: true,
+      isSystemDefault: false,
+      hasBackSide: input.hasBackSide ?? true,
+      previewThumbnailUrl: input.previewThumbnailUrl || null,
+      designConfiguration: input.designConfiguration || null,
+    });
+    const saved = await this.templateRepo.save(tpl);
+
+    if (input.isDefault) {
+      const settings = await this.getSchoolSettings(schoolId);
+      if (saved.cardType === IdCardType.STUDENT) {
+        settings.defaultStudentTemplateId = saved.id;
+      } else {
+        settings.defaultStaffTemplateId = saved.id;
+      }
+      await this.settingsRepo.save(settings);
+    }
+
+    return saved;
+  };
+
+  updateCustomTemplate = async (
+    id: string,
+    schoolId: string,
+    input: UpdateIdCardTemplateInput,
+  ): Promise<IdCardTemplate> => {
+    const tpl = await this.templateRepo.findOne({
+      where: { id, schoolId },
+    });
+    if (!tpl) {
+      throw new NotFoundException('Custom ID card template not found');
+    }
+
+    if (input.name !== undefined) tpl.name = input.name;
+    if (input.description !== undefined) tpl.description = input.description;
+    if (input.orientation !== undefined) tpl.orientation = input.orientation;
+    if (input.widthMm !== undefined) tpl.widthMm = input.widthMm;
+    if (input.heightMm !== undefined) tpl.heightMm = input.heightMm;
+    if (input.hasBackSide !== undefined) tpl.hasBackSide = input.hasBackSide;
+    if (input.previewThumbnailUrl !== undefined)
+      tpl.previewThumbnailUrl = input.previewThumbnailUrl;
+    if (input.designConfiguration !== undefined)
+      tpl.designConfiguration = input.designConfiguration;
+    if (input.isActive !== undefined) tpl.isActive = input.isActive;
+
+    const saved = await this.templateRepo.save(tpl);
+
+    if (input.isDefault) {
+      const settings = await this.getSchoolSettings(schoolId);
+      if (saved.cardType === IdCardType.STUDENT) {
+        settings.defaultStudentTemplateId = saved.id;
+      } else {
+        settings.defaultStaffTemplateId = saved.id;
+      }
+      await this.settingsRepo.save(settings);
+    }
+
+    return saved;
+  };
+
+  duplicateCustomTemplate = async (
+    id: string,
+    schoolId: string,
+  ): Promise<IdCardTemplate> => {
+    const original = await this.templateRepo.findOne({
+      where: [{ id, schoolId }, { id, schoolId: IsNull() }],
+    });
+    if (!original) {
+      throw new NotFoundException('Template to duplicate not found');
+    }
+
+    const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const duplicated = this.templateRepo.create({
+      schoolId,
+      key,
+      name: `${original.name} (Copy)`,
+      description: original.description,
+      cardType: original.cardType,
+      orientation: original.orientation,
+      widthMm: original.widthMm,
+      heightMm: original.heightMm,
+      version: '1.0.0',
+      isActive: true,
+      isSystemDefault: false,
+      hasBackSide: original.hasBackSide,
+      previewThumbnailUrl: original.previewThumbnailUrl,
+      designConfiguration: original.designConfiguration,
+    });
+
+    return this.templateRepo.save(duplicated);
+  };
+
+  deleteCustomTemplate = async (
+    id: string,
+    schoolId: string,
+  ): Promise<boolean> => {
+    const tpl = await this.templateRepo.findOne({
+      where: { id, schoolId },
+    });
+    if (!tpl) {
+      throw new NotFoundException(
+        'Custom template not found or is a system template',
+      );
+    }
+
+    const settings = await this.settingsRepo.findOne({ where: { schoolId } });
+    if (
+      settings?.defaultStudentTemplateId === id ||
+      settings?.defaultStaffTemplateId === id
+    ) {
+      throw new BadRequestException(
+        'Cannot delete a template currently set as school default. Change default first.',
+      );
+    }
+
+    await this.templateRepo.remove(tpl);
+    return true;
+  };
+
+  previewIdCardHtml = async (
+    schoolId: string,
+    input: PreviewIdCardInput,
+  ): Promise<IdCardRenderResult> => {
+    const school = await this.getSchoolBranding(schoolId);
+    const settings = await this.getSchoolSettings(schoolId);
+    const design = parseDesignConfiguration(input.designConfiguration);
+
+    const dummyStudent: StudentCardData = {
+      id: 'preview-student',
+      firstName: 'Chukwuebuka',
+      lastName: 'Okafor',
+      fullName: 'Chukwuebuka Daniel Okafor',
+      admissionNumber: 'SCH/2026/0142',
+      className: 'Senior Secondary School 2 Science',
+      gender: 'Male',
+      sessionName: '2025/2026 Academic Session',
+    };
+
+    const dummyStaff: StaffCardData = {
+      id: 'preview-staff',
+      firstName: 'Dr. Michael',
+      lastName: 'Okafor',
+      fullName: 'Dr. Michael Okafor',
+      staffId: 'STF/2026/0018',
+      role: 'FACULTY',
+      designation: 'Senior Science Teacher & Head of Department',
+      email: 'm.okafor@schoolright.ng',
+      phone: '+234 803 111 2233',
+    };
+
+    const cardData =
+      input.cardType === IdCardType.STAFF ? dummyStaff : dummyStudent;
+
+    let qrCodeDataUrl: string | undefined;
+    if (settings.showQrCode) {
+      qrCodeDataUrl = await this.generateQrCodeDataUrl(
+        JSON.stringify({
+          school: school.name,
+          type: input.cardType,
+          name: cardData.fullName,
+          id:
+            input.cardType === IdCardType.STAFF
+              ? dummyStaff.staffId
+              : dummyStudent.admissionNumber,
+        }),
+      );
+    }
+
+    const ctx: RenderCardContext<any> = {
+      school,
+      cardData,
+      options: {
+        side: IdCardSide.BOTH,
+        showQrCode: settings.showQrCode,
+        showSchoolAddress: settings.showSchoolAddress,
+        showPrincipalSignature: settings.showPrincipalSignature,
+        customNote: settings.customNote,
+        qrCodeDataUrl,
+      },
+    };
+
+    const frontHtml = renderCustomIdCardFront(
+      ctx,
+      design,
+      input.orientation,
+      input.cardType,
+    );
+    const backHtml = input.hasBackSide
+      ? renderCustomIdCardBack(ctx, design, input.orientation)
+      : null;
+
+    const combinedHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body { margin: 0; padding: 10px; display: flex; gap: 16px; justify-content: center; background: transparent; }
+        </style>
+      </head>
+      <body>
+        ${frontHtml}
+        ${backHtml || ''}
+      </body>
+      </html>
+    `;
+
+    return {
+      html: combinedHtml,
+      frontHtml,
+      backHtml,
+      totalCards: 1,
+      templateKey: 'custom-preview',
+      templateName: 'Custom Preview',
+    };
   };
 
   /**
@@ -321,9 +585,32 @@ export class IdCardsService implements OnModuleInit {
 
     const templateDef = getTemplateDefinition(entity.key);
     if (!templateDef) {
-      throw new NotFoundException(
-        `Registered template implementation not found for key: ${entity.key}`,
+      const customDesign = parseDesignConfiguration(
+        entity.designConfiguration,
       );
+      const dynamicDef: TemplateDefinition = {
+        key: entity.key,
+        name: entity.name,
+        description: entity.description || 'Custom ID Card Template',
+        cardType: entity.cardType,
+        orientation: entity.orientation,
+        widthMm: entity.widthMm,
+        heightMm: entity.heightMm,
+        version: entity.version,
+        isSystemDefault: false,
+        hasBackSide: entity.hasBackSide,
+        designConfiguration: customDesign as any,
+        renderFront: (ctx) =>
+          renderCustomIdCardFront(
+            ctx,
+            customDesign,
+            entity.orientation,
+            entity.cardType,
+          ),
+        renderBack: (ctx) =>
+          renderCustomIdCardBack(ctx, customDesign, entity.orientation),
+      };
+      return { templateDef: dynamicDef, entity };
     }
 
     return { templateDef, entity };

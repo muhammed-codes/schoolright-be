@@ -127,11 +127,6 @@ export class CommunicationService {
     schoolId: string,
     userId: string,
   ) => {
-    if (input.audience === AnnouncementAudience.CLASS && !input.targetClassId) {
-      throw new ForbiddenException(
-        'A class is required for class announcements',
-      );
-    }
     if (input.audience !== AnnouncementAudience.CLASS && input.targetClassId) {
       throw new ForbiddenException(
         'Only class announcements may target a class',
@@ -278,6 +273,13 @@ export class CommunicationService {
         saved.title,
         saved.body,
         data,
+      );
+    } else {
+      void this.notificationsService.notifyUsersByRole(
+        schoolId,
+        UserRole.PARENT,
+        saved.title,
+        saved.body,
       );
     }
     return saved;

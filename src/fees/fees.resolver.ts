@@ -24,6 +24,7 @@ import { FeeApprovalConfig } from './entities/fee-approval-config.entity';
 import { ReceiptTemplate } from './entities/receipt-template.entity';
 import { Receipt } from './entities/receipt.entity';
 import { StaffFeeVisibilityConfig } from './entities/staff-fee-visibility-config.entity';
+import { GraphQLJSONObject } from '../common/scalars/json-object.scalar';
 
 import { JwtAuthGuard, PermissionGuard, RolesGuard } from '../common/guards';
 import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
@@ -60,6 +61,8 @@ import {
   UpdateVisibilityConfigInput,
   InvoiceFilterInput,
   RecordOfflinePaymentInput,
+  CreateReceiptTemplateInput,
+  UpdateReceiptTemplateInput,
 } from './dto/fees.input';
 import { ObjectType, Field } from '@nestjs/graphql';
 
@@ -718,6 +721,16 @@ export class FeesResolver {
     return this.feesService.getReceiptTemplates(user.schoolId);
   }
 
+  @Query(() => ReceiptTemplate, { nullable: true })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @RequirePermission(AppResource.FEES, PermissionAction.READ)
+  receiptTemplate(
+    @Args('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.feesService.getReceiptTemplateById(id, user.schoolId);
+  }
+
   @Mutation(() => ReceiptTemplate, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @RequirePermission(AppResource.FEES, PermissionAction.UPDATE)
@@ -732,16 +745,120 @@ export class FeesResolver {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @RequirePermission(AppResource.FEES, PermissionAction.CREATE)
   createReceiptTemplate(
-    @Args('name') name: string,
-    @Args('templateKey') templateKey: string,
+    @Args('input', { type: () => CreateReceiptTemplateInput, nullable: true })
+    input: CreateReceiptTemplateInput | undefined,
+    @Args('name', { type: () => String, nullable: true })
+    name: string | undefined,
+    @Args('templateKey', { type: () => String, nullable: true })
+    templateKey: string | undefined,
     @Args('thumbnailUrl', { type: () => String, nullable: true })
     thumbnailUrl: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.feesService.createReceiptTemplate(
-      name,
-      templateKey,
+    const finalInput: CreateReceiptTemplateInput = input || {
+      name: name || 'Custom Receipt',
+      templateKey: templateKey || 'custom',
       thumbnailUrl,
+    };
+    return this.feesService.createReceiptTemplate(finalInput, user.schoolId);
+  }
+
+  @Mutation(() => ReceiptTemplate)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @RequirePermission(AppResource.FEES, PermissionAction.UPDATE)
+  updateReceiptTemplate(
+    @Args('id') id: string,
+    @Args('input') input: UpdateReceiptTemplateInput,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.feesService.updateReceiptTemplate(id, input, user.schoolId);
+  }
+
+  @Mutation(() => ReceiptTemplate)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @RequirePermission(AppResource.FEES, PermissionAction.CREATE)
+  duplicateReceiptTemplate(
+    @Args('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.feesService.duplicateReceiptTemplate(id, user.schoolId);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @RequirePermission(AppResource.FEES, PermissionAction.DELETE)
+  deleteReceiptTemplate(
+    @Args('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.feesService.deleteReceiptTemplate(id, user.schoolId);
+  }
+
+  @Query(() => String)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @RequirePermission(AppResource.FEES, PermissionAction.READ)
+  previewReceiptTemplateHtml(
+    @Args('config', { type: () => GraphQLJSONObject, nullable: true })
+    config: any,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.feesService.previewReceiptTemplateHtml(config, user.schoolId);
+  }
+
+  @Mutation(() => String)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
+  @RequirePermission(AppResource.FEES, PermissionAction.READ)
+  async generateReceiptHtml(
+    @Args('shareId') shareId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    if (user.role === UserRole.PARENT) {
+      const share = await this.feesService.getShareById(shareId);
+      if (!share || share.batch?.schoolId !== user.schoolId) {
+        throw new NotFoundException('Receipt not found');
+      }
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        share.studentId,
+        GuardianResource.RECEIPTS,
+        GuardianAction.VIEW,
+      );
+    }
+    return this.feesService.generateReceiptHtml(
+      shareId,
+      user.sub,
+      user.role,
+      user.schoolId,
+    );
+  }
+
+  @Mutation(() => String)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
+  @RequirePermission(AppResource.FEES, PermissionAction.READ)
+  async generateReceiptPdf(
+    @Args('shareId') shareId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    if (user.role === UserRole.PARENT) {
+      const share = await this.feesService.getShareById(shareId);
+      if (!share || share.batch?.schoolId !== user.schoolId) {
+        throw new NotFoundException('Receipt not found');
+      }
+      await this.guardianEnforcement.assertPermission(
+        user.sub,
+        user.schoolId,
+        share.studentId,
+        GuardianResource.RECEIPTS,
+        GuardianAction.VIEW,
+      );
+    }
+    return this.feesService.generateReceiptPdf(
+      shareId,
+      user.sub,
+      user.role,
       user.schoolId,
     );
   }

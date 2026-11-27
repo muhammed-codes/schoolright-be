@@ -6,8 +6,12 @@ import { IdCardType, IdCardOrientation } from '../enums/id-card.enums';
 @ObjectType()
 @Entity('id_card_templates')
 export class IdCardTemplate extends BaseEntity {
+  @Field(() => String, { nullable: true })
+  @Column({ type: 'uuid', nullable: true })
+  schoolId!: string | null;
+
   @Field()
-  @Column({ unique: true })
+  @Column()
   key!: string;
 
   @Field()

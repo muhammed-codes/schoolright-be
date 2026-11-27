@@ -247,10 +247,10 @@ export class AuthService {
                 }
                 if (!user.isActive) {
                   this.logger.warn(
-                    `Login blocked: User ${user.email} (${user.id}) is inactive`,
+                    `Login blocked: User ${user.email} (${user.id}) is inactive/deactivated`,
                   );
                   throw new ForbiddenException(
-                    'Your account is currently inactive. Please contact platform support or your school administrator.',
+                    'Your account has been deactivated. You are not able to access the portal at the moment. Please contact the school management.',
                   );
                 }
                 return this.rejectLegacyParentPassword(user).then(() => user);

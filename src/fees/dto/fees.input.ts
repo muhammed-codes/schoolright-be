@@ -1,4 +1,5 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
+import { GraphQLJSONObject } from '../../common/scalars/json-object.scalar';
 import {
   ArrayNotEmpty,
   IsArray,
@@ -432,3 +433,73 @@ export class RecordOfflinePaymentInput {
   @IsString()
   paidAt?: string;
 }
+
+@InputType()
+export class CreateReceiptTemplateInput {
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @Field(() => String, { defaultValue: 'custom' })
+  @IsOptional()
+  @IsString()
+  templateKey?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
+
+  @Field(() => Boolean, { defaultValue: false })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  @IsOptional()
+  config?: any;
+}
+
+@InputType()
+export class UpdateReceiptTemplateInput {
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  templateKey?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  @IsOptional()
+  config?: any;
+}
+

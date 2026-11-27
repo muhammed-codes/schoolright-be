@@ -24,9 +24,12 @@ import { StaffFeeVisibilityConfig } from './entities/staff-fee-visibility-config
 import { Student } from '../students/entities/student.entity';
 import { User } from '../users/entities/user.entity';
 import { StudentParent } from '../students/entities/student-parent.entity';
+import { School } from '../schools/entities/school.entity';
+import { PdfModule } from '../pdf/pdf.module';
 
 @Module({
   imports: [
+    PdfModule,
     TypeOrmModule.forFeature([
       FeeCategory,
       FeeStructure,
@@ -47,6 +50,7 @@ import { StudentParent } from '../students/entities/student-parent.entity';
       Student,
       User,
       StudentParent,
+      School,
     ]),
   ],
   providers: [FeesService, FeesResolver],

@@ -407,6 +407,7 @@ input CopyDayLayoutInput {
 input CreateAnnouncementInput {
   audience: AnnouncementAudience!
   body: String!
+  schoolId: String
   targetClassId: String
   title: String!
 }
@@ -515,6 +516,19 @@ input CreateGuardianPolicyInput {
   studentId: String
 }
 
+input CreateIdCardTemplateInput {
+  cardType: IdCardType! = STUDENT
+  description: String
+  designConfiguration: String
+  hasBackSide: Boolean! = true
+  heightMm: Float! = 85.6
+  isDefault: Boolean! = false
+  name: String!
+  orientation: IdCardOrientation! = PORTRAIT
+  previewThumbnailUrl: String
+  widthMm: Float! = 53.98
+}
+
 input CreateNonTeachingSlotInput {
   dayOfWeek: Int
   endTime: String
@@ -540,6 +554,15 @@ input CreatePermissionGroupInput {
   description: String
   name: String!
   schoolId: String
+}
+
+input CreateReceiptTemplateInput {
+  config: JSONObject
+  description: String
+  isDefault: Boolean! = false
+  name: String!
+  templateKey: String! = "custom"
+  thumbnailUrl: String
 }
 
 input CreateRecurringExpenseInput {
@@ -1656,6 +1679,7 @@ type IdCardTemplate {
   name: String!
   orientation: IdCardOrientation!
   previewThumbnailUrl: String
+  schoolId: String
   updatedAt: DateTime!
   version: String!
   widthMm: Float!
@@ -1767,10 +1791,13 @@ type Mutation {
   createGuardianAccessException(input: CreateGuardianExceptionInput!, schoolId: String): GuardianAccessException!
   createGuardianAccessPolicy(input: CreateGuardianPolicyInput!, schoolId: String): GuardianAccessPolicy!
   createGuardianAccessPolicyRule(action: GuardianAction!, effect: GuardianEffect!, policyId: String!, resource: GuardianResource!): GuardianAccessPolicyRule!
+
+  """Create a custom ID card template for the school"""
+  createIdCardTemplate(input: CreateIdCardTemplateInput!): IdCardTemplate!
   createNonTeachingSlot(input: CreateNonTeachingSlotInput!): NonTeachingSlot!
   createPeriod(input: CreatePeriodInput!): Period!
   createPermissionGroup(input: CreatePermissionGroupInput!): PermissionGroup!
-  createReceiptTemplate(name: String!, templateKey: String!, thumbnailUrl: String): ReceiptTemplate!
+  createReceiptTemplate(input: CreateReceiptTemplateInput, name: String, templateKey: String, thumbnailUrl: String): ReceiptTemplate!
   createRecurringExpense(input: CreateRecurringExpenseInput!): RecurringExpense!
   createResultSheet(input: CreateResultSheetInput!): ResultSheet!
   createResultTemplate(input: CreateResultTemplateInput!): ResultTemplate!
@@ -1785,18 +1812,26 @@ type Mutation {
   deactivateFeeStructure(id: String!): Boolean!
   deactivateSchool(id: String!): School!
   deactivateUser(id: String!): User!
-  deleteAnnouncement(id: String!): Boolean!
+  deleteAnnouncement(id: String!, schoolId: String): Boolean!
   deleteExpenseCategory(id: ID!): ExpenseCategory!
   deleteGuardianAccessException(id: String!): Boolean!
   deleteGuardianAccessPolicy(id: String!): Boolean!
   deleteGuardianAccessPolicyRule(id: String!): Boolean!
+
+  """Delete a custom ID card template"""
+  deleteIdCardTemplate(id: String!): Boolean!
   deleteNonTeachingSlot(id: String!): Boolean!
   deletePeriod(deleteGroup: Boolean! = true, id: String!): Boolean!
   deletePermissionGroup(groupId: String!, schoolId: String): Boolean!
+  deleteReceiptTemplate(id: String!): Boolean!
   deleteResultTemplate(id: String!): Boolean!
   deleteRoom(id: String!): Boolean!
   deleteSubject(id: String!): Boolean!
   deleteTimetableEntry(id: String!): Boolean!
+
+  """Duplicate an ID card template for customization"""
+  duplicateIdCardTemplate(id: String!): IdCardTemplate!
+  duplicateReceiptTemplate(id: String!): ReceiptTemplate!
   duplicateResultTemplate(id: String!): ResultTemplate!
   forgotPassword(input: ForgotPasswordInput!): Boolean!
   fundExpenseRequest(id: ID!): ExpenseRequest!
@@ -1808,6 +1843,8 @@ type Mutation {
   generateBatchStudentIdCardsPdf(input: GenerateBatchStudentIdCardsPdfInput!): IdCardPdfResult!
   generateBulkReportCards(resultSheetId: String!): String!
   generateInvoices(input: GenerateInvoicesInput!): GenerateInvoicesResult!
+  generateReceiptHtml(shareId: String!): String!
+  generateReceiptPdf(shareId: String!): String!
   generateReportCard(studentResultId: String!): String!
   generateReportCardPdf(studentResultId: String!): String!
   generateSchoolDaySchedule(input: GenerateSchoolDayScheduleInput!): SchoolDayScheduleGenerationResult!
@@ -1827,7 +1864,7 @@ type Mutation {
   markRecurringExpenseRecorded(id: ID!): RecurringExpense!
   markStudentAttendance(input: MarkAttendanceInput!): [StudentAttendance!]!
   promoteStudents(input: PromoteStudentsInput!): PromotionResult!
-  publishAnnouncement(id: String!): Announcement!
+  publishAnnouncement(id: String!, schoolId: String): Announcement!
   publishResultSheet(resultSheetId: String!): ResultSheet!
   recordExpenseRequestPayment(input: RecordExpenseRequestPaymentInput!): ExpenseRequest!
   recordOfflinePayment(input: RecordOfflinePaymentInput!): PaymentSubmissionStudentShare!
@@ -1865,7 +1902,7 @@ type Mutation {
   unarchiveResultSheet(resultSheetId: String!): ResultSheet!
   unlinkParent(parentUserId: String!, studentId: String!): Boolean!
   unlockTerm(termId: String!): Term!
-  updateAnnouncement(id: String!, input: UpdateAnnouncementInput!): Announcement!
+  updateAnnouncement(id: String!, input: UpdateAnnouncementInput!, schoolId: String): Announcement!
   updateBankAccount(id: String!, input: UpdateBankAccountInput!): SchoolBankAccount!
   updateClassSubjectAssignment(input: UpdateClassSubjectAssignmentInput!): ClassSubject!
   updateExpense(input: UpdateExpenseInput!): Expense!
@@ -1878,10 +1915,14 @@ type Mutation {
   updateGuardianAccessException(input: UpdateGuardianExceptionInput!): GuardianAccessException!
   updateGuardianAccessPolicy(input: UpdateGuardianPolicyInput!): GuardianAccessPolicy!
   updateGuardianAccessPolicyRule(input: UpdateGuardianPolicyRuleInput!): GuardianAccessPolicyRule!
+
+  """Update a custom ID card template for the school"""
+  updateIdCardTemplate(id: String!, input: UpdateIdCardTemplateInput!): IdCardTemplate!
   updateMyAdminThemePreference(preference: String!): User!
   updateNonTeachingSlot(input: UpdateNonTeachingSlotInput!): NonTeachingSlot!
   updatePeriod(input: UpdatePeriodInput!): Period!
   updatePermissionGroup(input: UpdatePermissionGroupInput!, schoolId: String): PermissionGroup!
+  updateReceiptTemplate(id: String!, input: UpdateReceiptTemplateInput!): ReceiptTemplate!
   updateRecurringExpense(input: UpdateRecurringExpenseInput!): RecurringExpense!
   updateResultTemplate(id: String!, input: UpdateResultTemplateInput!): ResultTemplate!
   updateRolePermission(input: UpdatePermissionInput!): RolePermission!
@@ -2051,6 +2092,7 @@ type PaymentAllocation {
   amount: Int!
   createdAt: DateTime!
   id: ID!
+  invoiceItem: StudentInvoiceItem
   studentInvoiceItemId: String
   studentShare: PaymentSubmissionStudentShare!
   studentShareId: String!
@@ -2237,6 +2279,15 @@ type PlatformStats {
   totalUsers: Int!
 }
 
+input PreviewIdCardInput {
+  cardType: IdCardType! = STUDENT
+  designConfiguration: String!
+  hasBackSide: Boolean! = true
+  orientation: IdCardOrientation! = PORTRAIT
+  staffId: String
+  studentId: String
+}
+
 input PreviewSchoolDayScheduleInput {
   blocks: [ScheduleBlockConfigInput!]! = []
   classIds: [String!]! = []
@@ -2262,7 +2313,7 @@ type PromotionResult {
 type Query {
   activeStaffQrCode: String!
   activeTerm: Term!
-  adminAnnouncementsPage(limit: Int! = 50, page: Int! = 1): PaginatedAnnouncement!
+  adminAnnouncementsPage(limit: Int! = 50, page: Int! = 1, schoolId: String): PaginatedAnnouncement!
   allFeeCategories: [FeeCategory!]!
   allRolePermissions: [RolePermission!]!
   announcement(id: String!): Announcement
@@ -2365,8 +2416,13 @@ type Query {
   pettyCashTransactions(limit: Int = 50): [PettyCashTransaction!]!
   platformStats: PlatformStats!
   previewGuardianAccess(action: GuardianAction!, guardianId: String!, resource: GuardianResource!, schoolId: String, studentId: String!): GuardianPreviewType!
+
+  """Preview an ID card template design with sample data"""
+  previewIdCardHtml(input: PreviewIdCardInput!): IdCardRenderResult!
+  previewReceiptTemplateHtml(config: JSONObject): String!
   previewReportCardHtml(config: JSONObject, templateId: String): String!
   previewSchoolDaySchedule(input: PreviewSchoolDayScheduleInput!): SchoolDaySchedulePreviewResult!
+  receiptTemplate(id: String!): ReceiptTemplate
   receiptTemplates: [ReceiptTemplate!]!
   recurringExpenses: [RecurringExpense!]!
 
@@ -2450,7 +2506,9 @@ type Receipt {
 }
 
 type ReceiptTemplate {
+  config: JSONObject
   createdAt: DateTime!
+  description: String
   id: ID!
   isActive: Boolean!
   isDefault: Boolean!
@@ -3422,6 +3480,19 @@ input UpdateGuardianPolicyRuleInput {
   id: String!
 }
 
+input UpdateIdCardTemplateInput {
+  description: String
+  designConfiguration: String
+  hasBackSide: Boolean
+  heightMm: Float
+  isActive: Boolean
+  isDefault: Boolean
+  name: String
+  orientation: IdCardOrientation
+  previewThumbnailUrl: String
+  widthMm: Float
+}
+
 input UpdateNonTeachingSlotInput {
   dayOfWeek: Int
   endTime: String
@@ -3459,6 +3530,16 @@ input UpdatePermissionInput {
   canRead: Boolean
   canUpdate: Boolean
   id: ID!
+}
+
+input UpdateReceiptTemplateInput {
+  config: JSONObject
+  description: String
+  isActive: Boolean
+  isDefault: Boolean
+  name: String
+  templateKey: String
+  thumbnailUrl: String
 }
 
 input UpdateRecurringExpenseInput {

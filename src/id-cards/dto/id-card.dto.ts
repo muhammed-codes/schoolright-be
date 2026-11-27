@@ -9,6 +9,7 @@ import {
   IsInt,
   Min,
   Max,
+  IsNotEmpty,
 } from 'class-validator';
 import {
   IdCardType,
@@ -296,4 +297,131 @@ export class GenerateBatchStaffIdCardsPdfInput {
   @IsOptional()
   @IsEnum(IdCardSide)
   side?: IdCardSide;
+}
+
+@InputType()
+export class CreateIdCardTemplateInput {
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @Field(() => IdCardType, { defaultValue: IdCardType.STUDENT })
+  @IsOptional()
+  @IsEnum(IdCardType)
+  cardType?: IdCardType;
+
+  @Field(() => IdCardOrientation, { defaultValue: IdCardOrientation.PORTRAIT })
+  @IsOptional()
+  @IsEnum(IdCardOrientation)
+  orientation?: IdCardOrientation;
+
+  @Field(() => Float, { defaultValue: 53.98 })
+  @IsOptional()
+  widthMm?: number;
+
+  @Field(() => Float, { defaultValue: 85.6 })
+  @IsOptional()
+  heightMm?: number;
+
+  @Field(() => Boolean, { defaultValue: true })
+  @IsOptional()
+  @IsBoolean()
+  hasBackSide?: boolean;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  previewThumbnailUrl?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  designConfiguration?: string;
+
+  @Field(() => Boolean, { defaultValue: false })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+}
+
+@InputType()
+export class UpdateIdCardTemplateInput {
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @Field(() => IdCardOrientation, { nullable: true })
+  @IsOptional()
+  @IsEnum(IdCardOrientation)
+  orientation?: IdCardOrientation;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  widthMm?: number;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  heightMm?: number;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  hasBackSide?: boolean;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  previewThumbnailUrl?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  designConfiguration?: string;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+}
+
+@InputType()
+export class PreviewIdCardInput {
+  @Field(() => IdCardType, { defaultValue: IdCardType.STUDENT })
+  @IsEnum(IdCardType)
+  cardType!: IdCardType;
+
+  @Field(() => IdCardOrientation, { defaultValue: IdCardOrientation.PORTRAIT })
+  @IsEnum(IdCardOrientation)
+  orientation!: IdCardOrientation;
+
+  @Field()
+  @IsString()
+  designConfiguration!: string;
+
+  @Field(() => Boolean, { defaultValue: true })
+  @IsBoolean()
+  hasBackSide!: boolean;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  studentId?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  staffId?: string;
 }

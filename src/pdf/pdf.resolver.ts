@@ -2,10 +2,19 @@ import { Resolver, Mutation, Args } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { PdfService } from './pdf.service';
 import { JwtAuthGuard, PermissionGuard, RolesGuard } from '../common/guards';
-import { CurrentUser, RequirePermission } from '../common/decorators';
+import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { UserRole } from '../common/enums';
 import { AppResource } from '../access/enums/resource.enum';
 import { PermissionAction } from '../access/enums/permission-action.enum';
+
+const PARENT_AND_STAFF_ROLES: UserRole[] = [
+  UserRole.SUPER_ADMIN,
+  UserRole.SCHOOL_ADMIN,
+  UserRole.PRINCIPAL,
+  UserRole.VICE_PRINCIPAL,
+  UserRole.CLASS_TEACHER,
+  UserRole.PARENT,
+];
 
 @Resolver()
 export class PdfResolver {
@@ -13,6 +22,7 @@ export class PdfResolver {
 
   @Mutation(() => String)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.RESULTS, PermissionAction.READ)
   generateReportCard(
     @Args('studentResultId') studentResultId: string,
@@ -28,6 +38,7 @@ export class PdfResolver {
 
   @Mutation(() => String)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
+  @Roles(...PARENT_AND_STAFF_ROLES)
   @RequirePermission(AppResource.RESULTS, PermissionAction.READ)
   generateReportCardPdf(
     @Args('studentResultId') studentResultId: string,
@@ -40,6 +51,7 @@ export class PdfResolver {
       user.role,
     );
   }
+
 
   @Mutation(() => String)
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)

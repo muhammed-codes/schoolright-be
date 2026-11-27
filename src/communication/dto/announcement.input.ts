@@ -24,6 +24,11 @@ export class CreateAnnouncementInput {
   @IsEnum(AnnouncementAudience)
   audience!: AnnouncementAudience;
 
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  schoolId?: string;
+
   @Field({ nullable: true })
   @IsOptional()
   @IsUUID()

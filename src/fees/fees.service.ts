@@ -54,6 +54,17 @@ import { PaginationArgs } from '../common/pagination';
 import { NotificationsService } from '../notifications/notifications.service';
 import { StudentParent } from '../students/entities/student-parent.entity';
 import { UserRole } from '../common/enums';
+import { School } from '../schools/entities/school.entity';
+import { PdfService } from '../pdf/pdf.service';
+import {
+  ReceiptTemplateConfig,
+  getDefaultReceiptTemplateConfig,
+} from './interfaces/receipt-template-config.interface';
+import {
+  renderReceiptHtml,
+  ReceiptRenderData,
+  ReceiptItemData,
+} from './templates/receipt-renderer';
 
 import { ClassEntity } from '../classes/entities/class.entity';
 
@@ -73,6 +84,8 @@ import {
   UpdateVisibilityConfigInput,
   InvoiceFilterInput,
   RecordOfflinePaymentInput,
+  CreateReceiptTemplateInput,
+  UpdateReceiptTemplateInput,
 } from './dto/fees.input';
 import {
   ClassFeeSummary,
@@ -123,8 +136,11 @@ export class FeesService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(StudentParent)
     private readonly studentParentRepo: Repository<StudentParent>,
+    @InjectRepository(School)
+    private readonly schoolRepo: Repository<School>,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
+    private readonly pdfService: PdfService,
   ) {}
 
   // ─── BE-FM-2: Fee Category & Structure ───────────────────────────────────
@@ -1629,6 +1645,7 @@ export class FeesService {
       .leftJoinAndSelect('batch.parent', 'parent')
       .leftJoinAndSelect('batch.bankAccount', 'bankAccount')
       .leftJoinAndSelect('share.allocations', 'allocations')
+      .leftJoinAndSelect('allocations.invoiceItem', 'invoiceItem')
       .leftJoinAndSelect('share.finalizedByUser', 'finalizedByUser')
       .where('batch.schoolId = :schoolId', { schoolId });
 
@@ -2107,8 +2124,87 @@ export class FeesService {
   getReceiptTemplates(schoolId: string) {
     return this.receiptTemplateRepo.find({
       where: { schoolId },
-      order: { name: 'ASC' },
+      order: { isDefault: 'DESC', name: 'ASC' },
     });
+  }
+
+  async getReceiptTemplateById(id: string, schoolId: string) {
+    const template = await this.receiptTemplateRepo.findOne({
+      where: { id, schoolId },
+    });
+    if (!template) {
+      throw new NotFoundException('Receipt template not found');
+    }
+    return template;
+  }
+
+  async createReceiptTemplate(
+    input: CreateReceiptTemplateInput,
+    schoolId: string,
+  ) {
+    if (input.isDefault) {
+      await this.receiptTemplateRepo.update({ schoolId }, { isDefault: false });
+    }
+
+    const tpl = this.receiptTemplateRepo.create({
+      schoolId,
+      name: input.name,
+      description: input.description ?? null,
+      templateKey: input.templateKey || 'custom',
+      thumbnailUrl: input.thumbnailUrl ?? null,
+      isActive: true,
+      isDefault: Boolean(input.isDefault),
+      config: input.config || getDefaultReceiptTemplateConfig(),
+    });
+    return this.receiptTemplateRepo.save(tpl);
+  }
+
+  async updateReceiptTemplate(
+    id: string,
+    input: UpdateReceiptTemplateInput,
+    schoolId: string,
+  ) {
+    const tpl = await this.getReceiptTemplateById(id, schoolId);
+
+    if (input.isDefault) {
+      await this.receiptTemplateRepo.update({ schoolId }, { isDefault: false });
+    }
+
+    if (input.name !== undefined) tpl.name = input.name;
+    if (input.description !== undefined) tpl.description = input.description;
+    if (input.templateKey !== undefined) tpl.templateKey = input.templateKey;
+    if (input.thumbnailUrl !== undefined) tpl.thumbnailUrl = input.thumbnailUrl;
+    if (input.isDefault !== undefined) tpl.isDefault = input.isDefault;
+    if (input.isActive !== undefined) tpl.isActive = input.isActive;
+    if (input.config !== undefined) tpl.config = input.config;
+
+    return this.receiptTemplateRepo.save(tpl);
+  }
+
+  async duplicateReceiptTemplate(id: string, schoolId: string) {
+    const original = await this.getReceiptTemplateById(id, schoolId);
+    const duplicated = this.receiptTemplateRepo.create({
+      schoolId,
+      name: `${original.name} (Copy)`,
+      description: original.description,
+      templateKey: original.templateKey,
+      thumbnailUrl: original.thumbnailUrl,
+      isActive: true,
+      isDefault: false,
+      config: original.config,
+    });
+    return this.receiptTemplateRepo.save(duplicated);
+  }
+
+  async deleteReceiptTemplate(id: string, schoolId: string) {
+    const tpl = await this.getReceiptTemplateById(id, schoolId);
+    if (tpl.isDefault) {
+      throw new BadRequestException(
+        'Cannot delete the default receipt template. Set another template as default first.',
+      );
+    }
+    await this.receiptTemplateRepo.remove(tpl);
+    return true;
   }
 
   setDefaultReceiptTemplate(id: string, schoolId: string) {
@@ -2124,21 +2220,222 @@ export class FeesService {
     });
   }
 
-  createReceiptTemplate(
-    name: string,
-    templateKey: string,
-    thumbnailUrl: string | undefined,
-    schoolId: string,
-  ) {
-    const tpl = this.receiptTemplateRepo.create({
-      schoolId,
-      name,
-      templateKey,
-      thumbnailUrl: thumbnailUrl ?? null,
-      isActive: true,
-      isDefault: false,
+  async getResolvedReceiptTemplate(schoolId: string): Promise<ReceiptTemplate> {
+    const defaultTpl = await this.receiptTemplateRepo.findOne({
+      where: { schoolId, isDefault: true, isActive: true },
     });
-    return this.receiptTemplateRepo.save(tpl);
+    if (defaultTpl) return defaultTpl;
+
+    const anyActive = await this.receiptTemplateRepo.findOne({
+      where: { schoolId, isActive: true },
+      order: { createdAt: 'ASC' },
+    });
+    if (anyActive) return anyActive;
+
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    const fallback = new ReceiptTemplate();
+    fallback.id = 'default';
+    fallback.schoolId = schoolId;
+    fallback.name = 'Standard Receipt';
+    fallback.templateKey = 'classic';
+    fallback.isActive = true;
+    fallback.isDefault = true;
+    fallback.config = getDefaultReceiptTemplateConfig(school?.name);
+    return fallback;
+  }
+
+  async previewReceiptTemplateHtml(config: any, schoolId: string): Promise<string> {
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    const resolvedConfig: ReceiptTemplateConfig =
+      config || getDefaultReceiptTemplateConfig(school?.name);
+
+    const dummyData: ReceiptRenderData = {
+      school: {
+        name: school?.name || 'SchoolRight Academy',
+        logoUrl: school?.logoUrl || null,
+        stampUrl: school?.stampUrl || null,
+        address: school?.address || 'Plot 123 Education Boulevard, Victoria Island, Lagos',
+        phone: school?.phone || '+234 800 123 4567',
+        email: school?.email || 'bursar@schoolright.ng',
+      },
+      student: {
+        fullName: 'Chukwuebuka Daniel Okafor',
+        admissionNumber: 'SCH/2026/0142',
+        className: 'Senior Secondary School 2 Science',
+      },
+      guardian: {
+        fullName: 'Dr. Michael Okafor',
+        email: 'michael.okafor@example.com',
+        phone: '+234 803 111 2233',
+      },
+      payment: {
+        serialNumber: 'RCP-2026-00482',
+        generatedAt: new Date(),
+        amount: 150000,
+        paymentMethod: 'Direct Bank Transfer',
+        reference: 'TXN-883920194',
+        bankName: 'First Bank Nigeria',
+      },
+      financialSummary: {
+        previousBalance: 0,
+        totalDue: 200000,
+        amountPaid: 150000,
+        outstandingBalance: 50000,
+      },
+      items: [
+        { description: 'First Term Tuition Fee', amount: 120000, amountPaid: 100000, balance: 20000 },
+        { description: 'Science Laboratory & Practical Fee', amount: 20000, amountPaid: 20000, balance: 0 },
+        { description: 'School Sports & Development Levy', amount: 10000, amountPaid: 10000, balance: 0 },
+        { description: 'ICT Resource & Library Access', amount: 50000, amountPaid: 20000, balance: 30000 },
+      ],
+    };
+
+    return renderReceiptHtml(dummyData, resolvedConfig);
+  }
+
+  async getReceiptFullData(
+    shareId: string,
+    schoolId: string,
+  ): Promise<{ data: ReceiptRenderData; template: ReceiptTemplate }> {
+    const share = await this.shareRepo.findOne({
+      where: { id: shareId },
+      relations: [
+        'batch',
+        'batch.parent',
+        'batch.bankAccount',
+        'student',
+        'student.currentClass',
+        'allocations',
+        'allocations.invoiceItem',
+      ],
+    });
+    if (!share || share.batch?.schoolId !== schoolId) {
+      throw new NotFoundException('Payment share record not found');
+    }
+
+    const receipt = await this.receiptRepo.findOne({
+      where: { studentShareId: shareId },
+      relations: ['template'],
+    });
+
+    const template =
+      receipt?.template || (await this.getResolvedReceiptTemplate(schoolId));
+
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+
+    // Invoices for student to calculate totals
+    const invoices = await this.invoiceRepo.find({
+      where: { studentId: share.studentId, schoolId },
+    });
+    const totalDue = invoices.reduce((acc, inv) => acc + (inv.totalAmount || 0), 0);
+    const totalPaidAcrossInvoices = invoices.reduce((acc, inv) => acc + (inv.totalPaid || 0), 0);
+    const outstandingBalance = Math.max(0, totalDue - totalPaidAcrossInvoices);
+
+    const items: ReceiptItemData[] = (share.allocations || []).map((alloc) => ({
+      description: alloc.invoiceItem?.description || 'Tuition & School Fees',
+      amount: alloc.amount,
+      amountPaid: alloc.amount,
+      balance: alloc.invoiceItem?.balance ?? 0,
+    }));
+
+    if (items.length === 0) {
+      items.push({
+        description: share.batch?.note || 'School Fees Payment',
+        amount: share.amount,
+        amountPaid: share.amount,
+        balance: 0,
+      });
+    }
+
+    const renderData: ReceiptRenderData = {
+      school: {
+        name: school?.name || 'SchoolRight Academy',
+        logoUrl: school?.logoUrl || null,
+        stampUrl: school?.stampUrl || null,
+        address: school?.address || null,
+        phone: school?.phone || null,
+        email: school?.email || null,
+      },
+      student: {
+        fullName: share.student?.fullName || 'Student',
+        admissionNumber: share.student?.admissionNumber || '—',
+        className: share.student?.currentClass?.name || null,
+      },
+      guardian: share.batch?.parent
+        ? {
+            fullName: share.batch.parent.fullName,
+            email: share.batch.parent.email,
+            phone: share.batch.parent.phone,
+          }
+        : null,
+      payment: {
+        serialNumber: receipt?.serialNumber || `REC-${share.id.slice(0, 8).toUpperCase()}`,
+        generatedAt: receipt?.generatedAt || share.batch?.createdAt || new Date(),
+        amount: share.amount,
+        paymentMethod: share.batch?.bankAccount
+          ? `Bank Transfer (${share.batch.bankAccount.bankName})`
+          : 'Bank Transfer',
+        reference: share.batch?.id ? `REF-${share.batch.id.slice(0, 10).toUpperCase()}` : undefined,
+        bankName: share.batch?.bankAccount?.bankName,
+        accountNumber: share.batch?.bankAccount?.accountNumber,
+      },
+      financialSummary: {
+        totalDue: totalDue > 0 ? totalDue : undefined,
+        amountPaid: share.amount,
+        outstandingBalance: totalDue > 0 ? outstandingBalance : undefined,
+      },
+      items,
+    };
+
+    return { data: renderData, template };
+  }
+
+  async generateReceiptHtml(
+    shareId: string,
+    userId: string,
+    role: UserRole,
+    schoolId: string,
+  ): Promise<string> {
+    if (role === UserRole.PARENT) {
+      const share = await this.shareRepo.findOne({
+        where: { id: shareId },
+        relations: ['batch'],
+      });
+      if (!share || share.batch?.schoolId !== schoolId) {
+        throw new NotFoundException('Receipt not found');
+      }
+      const isParentLinked = await this.studentParentRepo.findOne({
+        where: { studentId: share.studentId, parentId: userId },
+      });
+      if (!isParentLinked && share.batch.parentId !== userId) {
+        throw new ForbiddenException('You do not have access to this receipt');
+      }
+    }
+
+    const { data, template } = await this.getReceiptFullData(shareId, schoolId);
+    const config =
+      template.config || getDefaultReceiptTemplateConfig(data.school.name);
+    return renderReceiptHtml(data, config);
+  }
+
+  async generateReceiptPdf(
+    shareId: string,
+    userId: string,
+    role: UserRole,
+    schoolId: string,
+  ): Promise<string> {
+    const html = await this.generateReceiptHtml(shareId, userId, role, schoolId);
+    const { template } = await this.getReceiptFullData(shareId, schoolId);
+    const isThermal = template.config?.layout?.paperSize === 'THERMAL_80MM';
+
+    const pdfBuffer = await this.pdfService.generatePdfFromHtml(html, {
+      width: isThermal ? '80mm' : undefined,
+      margin: isThermal
+        ? { top: '3mm', bottom: '3mm', left: '2mm', right: '2mm' }
+        : undefined,
+    });
+
+    return `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
   }
 
   // ─── BE-FM-10: Notification helpers ────────────────────────────────────────

@@ -2,6 +2,7 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { Entity, Column, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { PaymentSubmissionStudentShare } from './payment-submission-student-share.entity';
+import { StudentInvoiceItem } from './student-invoice-item.entity';
 
 @ObjectType()
 @Entity('payment_allocations')
@@ -14,6 +15,11 @@ export class PaymentAllocation extends BaseEntity {
   @Field(() => String, { nullable: true })
   @Column({ type: 'uuid', nullable: true })
   studentInvoiceItemId!: string | null;
+
+  @Field(() => StudentInvoiceItem, { nullable: true })
+  @ManyToOne(() => StudentInvoiceItem, { nullable: true, eager: false })
+  @JoinColumn({ name: 'studentInvoiceItemId' })
+  invoiceItem?: StudentInvoiceItem | null;
 
   @Field(() => Int)
   @Column({ type: 'int' })

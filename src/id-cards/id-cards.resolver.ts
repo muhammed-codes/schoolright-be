@@ -21,6 +21,9 @@ import {
   GenerateStaffIdCardPdfInput,
   GenerateBatchStudentIdCardsPdfInput,
   GenerateBatchStaffIdCardsPdfInput,
+  CreateIdCardTemplateInput,
+  UpdateIdCardTemplateInput,
+  PreviewIdCardInput,
 } from './dto/id-card.dto';
 
 @Resolver()
@@ -36,8 +39,70 @@ export class IdCardsResolver {
   idCardTemplates(
     @Args('cardType', { type: () => IdCardType, nullable: true })
     cardType?: IdCardType,
+    @CurrentUser() user?: { schoolId: string },
   ): Promise<IdCardTemplate[]> {
-    return this.idCardsService.getTemplates(cardType);
+    return this.idCardsService.getTemplates(cardType, user?.schoolId);
+  }
+
+  @Mutation(() => IdCardTemplate, {
+    name: 'createIdCardTemplate',
+    description: 'Create a custom ID card template for the school',
+  })
+  @RequirePermission(AppResource.ID_CARDS, PermissionAction.CREATE)
+  createIdCardTemplate(
+    @Args('input') input: CreateIdCardTemplateInput,
+    @CurrentUser() user: { schoolId: string },
+  ): Promise<IdCardTemplate> {
+    return this.idCardsService.createCustomTemplate(user.schoolId, input);
+  }
+
+  @Mutation(() => IdCardTemplate, {
+    name: 'updateIdCardTemplate',
+    description: 'Update a custom ID card template for the school',
+  })
+  @RequirePermission(AppResource.ID_CARDS, PermissionAction.UPDATE)
+  updateIdCardTemplate(
+    @Args('id') id: string,
+    @Args('input') input: UpdateIdCardTemplateInput,
+    @CurrentUser() user: { schoolId: string },
+  ): Promise<IdCardTemplate> {
+    return this.idCardsService.updateCustomTemplate(id, user.schoolId, input);
+  }
+
+  @Mutation(() => IdCardTemplate, {
+    name: 'duplicateIdCardTemplate',
+    description: 'Duplicate an ID card template for customization',
+  })
+  @RequirePermission(AppResource.ID_CARDS, PermissionAction.CREATE)
+  duplicateIdCardTemplate(
+    @Args('id') id: string,
+    @CurrentUser() user: { schoolId: string },
+  ): Promise<IdCardTemplate> {
+    return this.idCardsService.duplicateCustomTemplate(id, user.schoolId);
+  }
+
+  @Mutation(() => Boolean, {
+    name: 'deleteIdCardTemplate',
+    description: 'Delete a custom ID card template',
+  })
+  @RequirePermission(AppResource.ID_CARDS, PermissionAction.DELETE)
+  deleteIdCardTemplate(
+    @Args('id') id: string,
+    @CurrentUser() user: { schoolId: string },
+  ): Promise<boolean> {
+    return this.idCardsService.deleteCustomTemplate(id, user.schoolId);
+  }
+
+  @Query(() => IdCardRenderResult, {
+    name: 'previewIdCardHtml',
+    description: 'Preview an ID card template design with sample data',
+  })
+  @RequirePermission(AppResource.ID_CARDS, PermissionAction.READ)
+  previewIdCardHtml(
+    @Args('input') input: PreviewIdCardInput,
+    @CurrentUser() user: { schoolId: string },
+  ): Promise<IdCardRenderResult> {
+    return this.idCardsService.previewIdCardHtml(user.schoolId, input);
   }
 
   @Query(() => IdCardTemplate, {

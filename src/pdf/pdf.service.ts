@@ -112,10 +112,14 @@ export class PdfService {
     role: UserRole,
     classId: string,
   ) => {
-    if (role === UserRole.SUBJECT_TEACHER || role === UserRole.PARENT) {
+    if (role === UserRole.SUBJECT_TEACHER) {
       throw new ForbiddenException(
         'You are not allowed to generate result sheets',
       );
+    }
+
+    if (role === UserRole.PARENT) {
+      return Promise.resolve();
     }
 
     if (role !== UserRole.CLASS_TEACHER) return Promise.resolve();
@@ -132,7 +136,15 @@ export class PdfService {
       });
   };
 
-  generatePdfFromHtml = (html: string): Promise<Buffer> => {
+  generatePdfFromHtml = (
+    html: string,
+    options?: {
+      format?: any;
+      width?: string;
+      height?: string;
+      margin?: any;
+    },
+  ): Promise<Buffer> => {
     let browserInstance: import('puppeteer-core').Browser | undefined;
 
     const isProduction =
@@ -200,9 +212,11 @@ export class PdfService {
       .then((page) =>
         page.setContent(html, { waitUntil: 'load' }).then(() =>
           page.pdf({
-            format: 'A4',
+            format: options?.width ? undefined : (options?.format ?? 'A4'),
+            width: options?.width,
+            height: options?.height,
             printBackground: true,
-            margin: {
+            margin: options?.margin ?? {
               top: '20mm',
               bottom: '20mm',
               left: '15mm',
@@ -318,6 +332,12 @@ export class PdfService {
           const isSheetPublished =
             studentResult.resultSheet?.status === ResultStatus.PUBLISHED ||
             studentResult.resultSheet?.status === ResultStatus.SCORES_ENTERED;
+
+          if (role === UserRole.PARENT && !isSheetPublished) {
+            throw new ForbiddenException(
+              'Results for this term have not been published yet',
+            );
+          }
 
           const subjectScoresData: SubjectScoreData[] = (
             studentResult.subjectScores || []

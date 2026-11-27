@@ -27,7 +27,12 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   validate = async (payload: JwtPayload) => {
     const user = await this.usersService.findById(payload.sub);
-    if (!user || !user.isActive) throw new UnauthorizedException();
+    if (!user) throw new UnauthorizedException('User account not found');
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Your account has been deactivated. You are not able to access the portal at the moment. Please contact the school management.',
+      );
+    }
     return {
       sub: user.id,
       email: user.email,

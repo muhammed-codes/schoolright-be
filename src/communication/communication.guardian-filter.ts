@@ -12,6 +12,6 @@ export const filterAnnouncementsForGuardian = (
       announcement.audience === AnnouncementAudience.SCHOOL ||
       announcement.audience === AnnouncementAudience.GUARDIANS ||
       (announcement.audience === AnnouncementAudience.CLASS &&
-        Boolean(announcement.targetClassId) &&
-        allowedClassIds.has(announcement.targetClassId!)),
+        (!announcement.targetClassId ||
+          allowedClassIds.has(announcement.targetClassId))),
   );

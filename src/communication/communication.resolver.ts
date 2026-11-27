@@ -1,5 +1,9 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { NotFoundException, UseGuards } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UseGuards,
+} from '@nestjs/common';
 import { CommunicationService } from './communication.service';
 import { filterAnnouncementsForGuardian } from './communication.guardian-filter';
 import { Announcement } from './entities/announcement.entity';
@@ -26,12 +30,26 @@ type AuthUser = { sub: string; schoolId?: string; role: UserRole };
 
 @Resolver(() => Announcement)
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
-@Roles(...SCHOOL_STAFF_ROLES)
+@Roles(UserRole.SUPER_ADMIN, ...SCHOOL_STAFF_ROLES)
 export class CommunicationResolver {
   constructor(
     private readonly communicationService: CommunicationService,
     private readonly guardianEnforcement: GuardianEnforcementService,
   ) {}
+
+  private resolveSchoolId(user: AuthUser, requestedSchoolId?: string): string {
+    if (user.role === UserRole.SUPER_ADMIN) {
+      if (!requestedSchoolId) {
+        throw new ForbiddenException('Select a school for this announcement');
+      }
+      return requestedSchoolId;
+    }
+    if (!user.schoolId) throw new ForbiddenException('A school scope is required');
+    if (requestedSchoolId && requestedSchoolId !== user.schoolId) {
+      throw new ForbiddenException('You can only manage announcements for your school');
+    }
+    return user.schoolId;
+  }
 
   private filterForGuardian = async (
     announcements: Announcement[],
@@ -120,10 +138,12 @@ export class CommunicationResolver {
   @RequirePermission(AppResource.COMMUNICATION, PermissionAction.MANAGE)
   adminAnnouncementsPage(
     @Args() pagination: PaginationArgs,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
-    if (!user.schoolId) return { items: [], total: 0, page: 1, totalPages: 0 };
-    return this.communicationService.listForAdmin(user.schoolId, pagination);
+    const scopedSchoolId = this.resolveSchoolId(user, schoolId);
+    return this.communicationService.listForAdmin(scopedSchoolId, pagination);
   }
 
   @Mutation(() => Announcement)
@@ -132,8 +152,8 @@ export class CommunicationResolver {
     @Args('input') input: CreateAnnouncementInput,
     @CurrentUser() user: AuthUser,
   ) {
-    if (!user.schoolId) throw new Error('A school scope is required');
-    return this.communicationService.create(input, user.schoolId, user.sub);
+    const schoolId = this.resolveSchoolId(user, input.schoolId);
+    return this.communicationService.create(input, schoolId, user.sub);
   }
 
   @Mutation(() => Announcement)
@@ -141,23 +161,42 @@ export class CommunicationResolver {
   updateAnnouncement(
     @Args('id') id: string,
     @Args('input') input: UpdateAnnouncementInput,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
-    if (!user.schoolId) throw new Error('A school scope is required');
-    return this.communicationService.update(id, input, user.schoolId);
+    return this.communicationService.update(
+      id,
+      input,
+      this.resolveSchoolId(user, schoolId),
+    );
   }
 
   @Mutation(() => Announcement)
   @RequirePermission(AppResource.COMMUNICATION, PermissionAction.PUBLISH)
-  publishAnnouncement(@Args('id') id: string, @CurrentUser() user: AuthUser) {
-    if (!user.schoolId) throw new Error('A school scope is required');
-    return this.communicationService.publish(id, user.schoolId);
+  publishAnnouncement(
+    @Args('id') id: string,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.communicationService.publish(
+      id,
+      this.resolveSchoolId(user, schoolId),
+    );
   }
 
   @Mutation(() => Boolean)
   @RequirePermission(AppResource.COMMUNICATION, PermissionAction.DELETE)
-  deleteAnnouncement(@Args('id') id: string, @CurrentUser() user: AuthUser) {
-    if (!user.schoolId) throw new Error('A school scope is required');
-    return this.communicationService.delete(id, user.schoolId);
+  deleteAnnouncement(
+    @Args('id') id: string,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.communicationService.delete(
+      id,
+      this.resolveSchoolId(user, schoolId),
+    );
   }
 }
