@@ -16,7 +16,11 @@ import { ClassEntity } from '../classes/entities/class.entity';
 import { SchoolsService } from '../schools/schools.service';
 import { PdfService } from '../pdf/pdf.service';
 import { UploadService } from '../upload/upload.service';
-import { IdCardType, IdCardSide } from './enums/id-card.enums';
+import {
+  IdCardType,
+  IdCardSide,
+  IdCardOrientation,
+} from './enums/id-card.enums';
 
 describe('IdCardsService', () => {
   jest.setTimeout(30000);
@@ -88,6 +92,14 @@ describe('IdCardsService', () => {
         if (where.id && t.id !== where.id) match = false;
         if (where.key && t.key !== where.key) match = false;
         if (where.cardType && t.cardType !== where.cardType) match = false;
+        if (where.schoolId !== undefined) {
+          if (typeof where.schoolId === 'string' && t.schoolId !== where.schoolId) {
+            match = false;
+          } else if (typeof where.schoolId === 'object' && t.schoolId) {
+            // IsNull() or similar
+            match = false;
+          }
+        }
         if (
           where.isSystemDefault !== undefined &&
           t.isSystemDefault !== where.isSystemDefault
@@ -363,5 +375,19 @@ describe('IdCardsService', () => {
     );
     expect(generatedId).toMatch(/^[A-Z]{3}-\d{4}-\d{3}$/);
     expect(generatedId).toContain('STP-');
+  });
+
+  it('should fork a system template when school customizes and saves it', async () => {
+    const updated = await service.updateCustomTemplate('tpl-1', 'school-123', {
+      name: 'Customized Classic Student ID',
+      isDefault: true,
+      orientation: IdCardOrientation.LANDSCAPE,
+    });
+
+    expect(updated).toBeDefined();
+    expect(updated.schoolId).toBe('school-123');
+    expect(updated.name).toBe('Customized Classic Student ID');
+    expect(updated.isSystemDefault).toBe(false);
+    expect(mockSettingsRepo.save).toHaveBeenCalled();
   });
 });

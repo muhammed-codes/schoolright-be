@@ -200,35 +200,78 @@ export class IdCardsService implements OnModuleInit {
     schoolId: string,
     input: UpdateIdCardTemplateInput,
   ): Promise<IdCardTemplate> => {
-    const tpl = await this.templateRepo.findOne({
+    let tpl = await this.templateRepo.findOne({
       where: { id, schoolId },
     });
-    if (!tpl) {
-      throw new NotFoundException('Custom ID card template not found');
-    }
 
-    if (input.name !== undefined) tpl.name = input.name;
-    if (input.description !== undefined) tpl.description = input.description;
-    if (input.orientation !== undefined) tpl.orientation = input.orientation;
-    if (input.widthMm !== undefined) tpl.widthMm = input.widthMm;
-    if (input.heightMm !== undefined) tpl.heightMm = input.heightMm;
-    if (input.hasBackSide !== undefined) tpl.hasBackSide = input.hasBackSide;
-    if (input.previewThumbnailUrl !== undefined)
-      tpl.previewThumbnailUrl = input.previewThumbnailUrl;
-    if (input.designConfiguration !== undefined)
-      tpl.designConfiguration = input.designConfiguration;
-    if (input.isActive !== undefined) tpl.isActive = input.isActive;
+    if (!tpl) {
+      // Check if it is a system template being customized by the school
+      const systemTpl = await this.templateRepo.findOne({
+        where: { id, schoolId: IsNull() },
+      });
+      if (systemTpl) {
+        const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        tpl = this.templateRepo.create({
+          schoolId,
+          key,
+          name: input.name ?? systemTpl.name,
+          description: input.description ?? systemTpl.description,
+          cardType: systemTpl.cardType,
+          orientation: input.orientation ?? systemTpl.orientation,
+          widthMm: input.widthMm ?? systemTpl.widthMm,
+          heightMm: input.heightMm ?? systemTpl.heightMm,
+          version: '1.0.0',
+          isActive: input.isActive ?? true,
+          isSystemDefault: false,
+          hasBackSide: input.hasBackSide ?? systemTpl.hasBackSide,
+          previewThumbnailUrl:
+            input.previewThumbnailUrl ?? systemTpl.previewThumbnailUrl,
+          designConfiguration:
+            input.designConfiguration ?? systemTpl.designConfiguration,
+        });
+      } else {
+        throw new NotFoundException('Custom ID card template not found');
+      }
+    } else {
+      if (input.name !== undefined) tpl.name = input.name;
+      if (input.description !== undefined) tpl.description = input.description;
+      if (input.orientation !== undefined) tpl.orientation = input.orientation;
+      if (input.widthMm !== undefined) tpl.widthMm = input.widthMm;
+      if (input.heightMm !== undefined) tpl.heightMm = input.heightMm;
+      if (input.hasBackSide !== undefined) tpl.hasBackSide = input.hasBackSide;
+      if (input.previewThumbnailUrl !== undefined)
+        tpl.previewThumbnailUrl = input.previewThumbnailUrl;
+      if (input.designConfiguration !== undefined)
+        tpl.designConfiguration = input.designConfiguration;
+      if (input.isActive !== undefined) tpl.isActive = input.isActive;
+    }
 
     const saved = await this.templateRepo.save(tpl);
 
-    if (input.isDefault) {
+    if (input.isDefault !== undefined) {
       const settings = await this.getSchoolSettings(schoolId);
-      if (saved.cardType === IdCardType.STUDENT) {
-        settings.defaultStudentTemplateId = saved.id;
+      if (input.isDefault) {
+        if (saved.cardType === IdCardType.STUDENT) {
+          settings.defaultStudentTemplateId = saved.id;
+        } else {
+          settings.defaultStaffTemplateId = saved.id;
+        }
+        await this.settingsRepo.save(settings);
       } else {
-        settings.defaultStaffTemplateId = saved.id;
+        if (
+          saved.cardType === IdCardType.STUDENT &&
+          settings.defaultStudentTemplateId === saved.id
+        ) {
+          settings.defaultStudentTemplateId = null as any;
+          await this.settingsRepo.save(settings);
+        } else if (
+          saved.cardType === IdCardType.STAFF &&
+          settings.defaultStaffTemplateId === saved.id
+        ) {
+          settings.defaultStaffTemplateId = null as any;
+          await this.settingsRepo.save(settings);
+        }
       }
-      await this.settingsRepo.save(settings);
     }
 
     return saved;
