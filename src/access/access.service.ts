@@ -665,7 +665,10 @@ export class AccessService implements OnModuleInit {
     requesterSchoolId?: string | null,
   ) => {
     let permission = await this.permissionRepo.findOne({ where: { id } });
-    if (!permission) throw new BadRequestException('The requested permission could not be found');
+    if (!permission)
+      throw new BadRequestException(
+        'The requested permission could not be found',
+      );
 
     if (
       ![UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN].includes(requesterRole!)

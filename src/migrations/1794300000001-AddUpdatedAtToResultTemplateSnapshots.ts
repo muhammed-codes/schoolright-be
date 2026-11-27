@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUpdatedAtToResultTemplateSnapshots1794300000001
-  implements MigrationInterface
-{
+export class AddUpdatedAtToResultTemplateSnapshots1794300000001 implements MigrationInterface {
   name = 'AddUpdatedAtToResultTemplateSnapshots1794300000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

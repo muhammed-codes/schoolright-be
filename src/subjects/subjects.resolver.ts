@@ -39,7 +39,9 @@ export class SubjectsResolver {
   ) {
     const targetId = input?.id || id;
     if (!targetId) {
-      throw new BadRequestException('The subject ID is required for this update');
+      throw new BadRequestException(
+        'The subject ID is required for this update',
+      );
     }
     const targetName = input?.name !== undefined ? input.name : name;
     const targetCode = input?.code !== undefined ? input.code : code;

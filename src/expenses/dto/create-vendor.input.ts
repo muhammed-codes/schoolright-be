@@ -20,7 +20,7 @@ export class CreateExpenseVendorInput {
   @IsString()
   contactPerson?: string;
 
-@Field({ nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @Matches(/^(?:\+?[1-9]\d{6,14}|0\d{6,14})?$/, {

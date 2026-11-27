@@ -34,7 +34,8 @@ export class AllExceptionsFilter implements GqlExceptionFilter {
       const requestPath = req?.url || 'GraphQL';
       const requestIp = req?.ip || 'unknown';
 
-      const userFriendlyMessage = message || 'Something went wrong. Please try again.';
+      const userFriendlyMessage =
+        message || 'Something went wrong. Please try again.';
 
       this.logger.error(
         `GraphQL Error - Path: ${requestPath} - IP: ${requestIp} - Status: ${status} - Message: ${userFriendlyMessage}`,

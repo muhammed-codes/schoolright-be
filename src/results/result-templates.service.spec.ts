@@ -76,9 +76,9 @@ describe('ResultTemplatesService', () => {
   it('enforces multi-tenant isolation and rejects template belonging to another school', async () => {
     mockTemplateRepo.findOne.mockResolvedValueOnce(null); // not found in schoolB
 
-    await expect(
-      service.getTemplateById('tpl-1', schoolB),
-    ).rejects.toThrow('Result template not found');
+    await expect(service.getTemplateById('tpl-1', schoolB)).rejects.toThrow(
+      'Result template not found',
+    );
   });
 
   it('resolves class-specific template over school default', async () => {

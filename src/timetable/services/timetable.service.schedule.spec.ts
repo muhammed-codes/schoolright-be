@@ -124,6 +124,6 @@ describe('TimetableService school-day schedule API', () => {
         { ...input, dayOfWeeks: [0], classIds: [] } as any,
         'school-1',
       ),
-    ).rejects.toThrow('Select valid days');
+    ).rejects.toThrow(/select valid days/i);
   });
 });

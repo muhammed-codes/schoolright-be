@@ -255,7 +255,8 @@ export const getDefaultResultTemplateConfig = (
     accentColor: '#146356',
     headerBackgroundColor: '#E4EEEA',
     headerTextColor: '#14201C',
-    fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily:
+      "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     headerAlignment: 'left',
   },
   studentInfo: {

@@ -3,7 +3,10 @@ import * as yup from 'yup';
 
 const userPhoneSchema = yup
   .string()
-  .matches(/^(?:\+?[1-9]\d{6,14}|0\d{6,14})?$/, 'Please enter a valid phone number')
+  .matches(
+    /^(?:\+?[1-9]\d{6,14}|0\d{6,14})?$/,
+    'Please enter a valid phone number',
+  )
   .nullable()
   .optional();
 

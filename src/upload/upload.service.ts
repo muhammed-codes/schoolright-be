@@ -202,7 +202,10 @@ export class UploadService implements OnModuleInit {
       .replace(/\\/g, '/')
       .replace(/^\/+|\/+$/g, '');
     if (!normalized || normalized.includes('..') || normalized.length > 120) {
-      throw new HttpException('The upload folder name is not valid', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'The upload folder name is not valid',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     return `schoolpilot/${schoolId}/${normalized}`;
   };

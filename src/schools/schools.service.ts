@@ -190,7 +190,9 @@ export class SchoolsService implements OnModuleInit {
           statuses: ['PENDING', 'SUSPENDED', 'REJECTED'],
         });
     } else if (status) {
-      throw new BadRequestException('The selected school status filter is not supported');
+      throw new BadRequestException(
+        'The selected school status filter is not supported',
+      );
     }
 
     return queryBuilder

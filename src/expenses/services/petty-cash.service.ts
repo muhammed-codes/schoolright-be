@@ -42,7 +42,9 @@ export class PettyCashService {
   ): Promise<PettyCashTransaction> => {
     const schoolId = user.schoolId;
     if (!schoolId)
-      throw new BadRequestException('You must belong to a school to perform this action');
+      throw new BadRequestException(
+        'You must belong to a school to perform this action',
+      );
 
     const account = await this.getAccount(schoolId);
     const amount = Number(input.amount);
@@ -80,7 +82,9 @@ export class PettyCashService {
   ): Promise<PettyCashTransaction> => {
     const schoolId = user.schoolId;
     if (!schoolId)
-      throw new BadRequestException('You must belong to a school to perform this action');
+      throw new BadRequestException(
+        'You must belong to a school to perform this action',
+      );
 
     const account = await this.getAccount(schoolId);
     const currentBal = Number(account.currentBalance || 0);

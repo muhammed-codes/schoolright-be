@@ -36,7 +36,9 @@ export class TermsService {
     const end = new Date(endDate);
 
     if (start > end) {
-      throw new BadRequestException('The start date cannot be after the end date');
+      throw new BadRequestException(
+        'The start date cannot be after the end date',
+      );
     }
 
     let count = 0;

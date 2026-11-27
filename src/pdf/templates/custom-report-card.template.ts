@@ -45,14 +45,17 @@ export const generateCustomReportCardHtml = (
   data: ReportCardData,
   customConfig?: Partial<ResultTemplateConfig> | null,
 ): string => {
-  const defaults = getDefaultResultTemplateConfig(
-    data.school.name,
-    '#146356',
-  );
+  const defaults = getDefaultResultTemplateConfig(data.school.name, '#146356');
   const cfg: ResultTemplateConfig = {
     branding: { ...defaults.branding, ...(customConfig?.branding || {}) },
-    studentInfo: { ...defaults.studentInfo, ...(customConfig?.studentInfo || {}) },
-    resultsTable: { ...defaults.resultsTable, ...(customConfig?.resultsTable || {}) },
+    studentInfo: {
+      ...defaults.studentInfo,
+      ...(customConfig?.studentInfo || {}),
+    },
+    resultsTable: {
+      ...defaults.resultsTable,
+      ...(customConfig?.resultsTable || {}),
+    },
     performanceSummary: {
       ...defaults.performanceSummary,
       ...(customConfig?.performanceSummary || {}),
@@ -89,12 +92,16 @@ export const generateCustomReportCardHtml = (
 
   // Pagination calculation
   const allSubjects = data.subjectScores || [];
-  const maxRows = layout.maxSubjectsPerPage > 0 ? layout.maxSubjectsPerPage : 14;
+  const maxRows =
+    layout.maxSubjectsPerPage > 0 ? layout.maxSubjectsPerPage : 14;
   const subjectPages: SubjectScoreData[][] = [];
 
   if (allSubjects.length === 0) {
     subjectPages.push([]);
-  } else if (layout.tablePaginationMode === 'split-by-max-rows' || allSubjects.length > maxRows) {
+  } else if (
+    layout.tablePaginationMode === 'split-by-max-rows' ||
+    allSubjects.length > maxRows
+  ) {
     for (let i = 0; i < allSubjects.length; i += maxRows) {
       subjectPages.push(allSubjects.slice(i, i + maxRows));
     }
@@ -105,8 +112,14 @@ export const generateCustomReportCardHtml = (
   const totalPages = subjectPages.length;
 
   // Performance calculations
-  const totalMarks = data.result.totalScore != null ? Number(data.result.totalScore).toFixed(1) : '—';
-  const avgMarks = data.result.percentage != null ? `${Number(data.result.percentage).toFixed(1)}%` : '—';
+  const totalMarks =
+    data.result.totalScore != null
+      ? Number(data.result.totalScore).toFixed(1)
+      : '—';
+  const avgMarks =
+    data.result.percentage != null
+      ? `${Number(data.result.percentage).toFixed(1)}%`
+      : '—';
   const subjectsOffered = allSubjects.length;
   const benchmark = summary.passBenchmark || 50;
   const subjectsPassed = allSubjects.filter(
@@ -199,7 +212,8 @@ export const generateCustomReportCardHtml = (
             : ''
         }
         ${
-          studentInfo.showTotalStudentsInClass && data.student.totalStudentsInClass
+          studentInfo.showTotalStudentsInClass &&
+          data.student.totalStudentsInClass
             ? `<div class="field-item">
                 <span class="field-label">${esc(studentInfo.totalStudentsInClassLabel || 'Class Size')}</span>
                 <span class="field-value">${data.student.totalStudentsInClass} students</span>
@@ -226,9 +240,22 @@ export const generateCustomReportCardHtml = (
     </div>
   `;
 
-  const renderTable = (subjects: SubjectScoreData[], isSubsequentPage: boolean) => {
-    const paddingClass = tableCfg.cellPadding === 'compact' ? 'pad-compact' : tableCfg.cellPadding === 'relaxed' ? 'pad-relaxed' : 'pad-normal';
-    const fontClass = tableCfg.fontSize === 'xs' ? 'font-xs' : tableCfg.fontSize === 'md' ? 'font-md' : 'font-sm';
+  const renderTable = (
+    subjects: SubjectScoreData[],
+    isSubsequentPage: boolean,
+  ) => {
+    const paddingClass =
+      tableCfg.cellPadding === 'compact'
+        ? 'pad-compact'
+        : tableCfg.cellPadding === 'relaxed'
+          ? 'pad-relaxed'
+          : 'pad-normal';
+    const fontClass =
+      tableCfg.fontSize === 'xs'
+        ? 'font-xs'
+        : tableCfg.fontSize === 'md'
+          ? 'font-md'
+          : 'font-sm';
 
     return `
       <div class="results-table-container">
@@ -242,7 +269,9 @@ export const generateCustomReportCardHtml = (
             <tr style="background:${tableHeaderBg};color:${tableHeaderText};border-color:${borderColor};">
               ${visibleColumns
                 .map((col) => {
-                  const widthStyle = col.widthPercent ? `width:${col.widthPercent}%;` : '';
+                  const widthStyle = col.widthPercent
+                    ? `width:${col.widthPercent}%;`
+                    : '';
                   const alignStyle = `text-align:${col.align || 'center'};`;
                   return `<th style="${widthStyle}${alignStyle}border-color:${borderColor};" class="${col.bold ? 'font-bold' : ''}">${esc(col.label)}</th>`;
                 })
@@ -263,16 +292,38 @@ export const generateCustomReportCardHtml = (
                         if (col.type === 'subject') {
                           content = `<span class="subject-name">${esc(subject.name)}</span>`;
                         } else if (col.type === 'component') {
-                          const targetKey = (col.componentKey || col.label || '').toLowerCase().trim();
-                          const matched = (subject.componentScores || []).find((cs) => {
-                            const cKey = (cs.component || '').toLowerCase().trim();
-                            return cKey === targetKey || cKey.includes(targetKey) || targetKey.includes(cKey);
-                          });
-                          content = matched?.score != null ? String(matched.score) : '—';
+                          const targetKey = (
+                            col.componentKey ||
+                            col.label ||
+                            ''
+                          )
+                            .toLowerCase()
+                            .trim();
+                          const matched = (subject.componentScores || []).find(
+                            (cs) => {
+                              const cKey = (cs.component || '')
+                                .toLowerCase()
+                                .trim();
+                              return (
+                                cKey === targetKey ||
+                                cKey.includes(targetKey) ||
+                                targetKey.includes(cKey)
+                              );
+                            },
+                          );
+                          content =
+                            matched?.score != null
+                              ? String(matched.score)
+                              : '—';
                         } else if (col.type === 'total') {
-                          content = subject.totalScore != null ? `<strong>${subject.totalScore}</strong>` : '—';
+                          content =
+                            subject.totalScore != null
+                              ? `<strong>${subject.totalScore}</strong>`
+                              : '—';
                         } else if (col.type === 'grade') {
-                          content = subject.grade ? `<span class="grade-pill font-bold" style="color:${primaryColor};">${esc(subject.grade)}</span>` : '—';
+                          content = subject.grade
+                            ? `<span class="grade-pill font-bold" style="color:${primaryColor};">${esc(subject.grade)}</span>`
+                            : '—';
                         } else if (col.type === 'remark') {
                           content = esc(getGradeRemark(subject.grade));
                         }

@@ -1758,7 +1758,9 @@ export class FeesService {
         const nextStep = sortedSteps.find((s) => !decidedStepIds.has(s.id));
 
         if (!nextStep)
-          throw new BadRequestException('All approval steps have already been decided');
+          throw new BadRequestException(
+            'All approval steps have already been decided',
+          );
 
         const isThisApprover =
           (nextStep.approverType === ApproverType.SPECIFIC_STAFF &&

@@ -17,9 +17,7 @@ import { ResultTemplateConfig } from './templates/result-template-config.interfa
 
 @Resolver(() => ResultTemplate)
 export class ResultTemplatesResolver {
-  constructor(
-    private readonly templatesService: ResultTemplatesService,
-  ) {}
+  constructor(private readonly templatesService: ResultTemplatesService) {}
 
   private canManageTemplates = (role: UserRole) => {
     return [
@@ -57,7 +55,10 @@ export class ResultTemplatesResolver {
     @Args('classId') classId: string,
     @CurrentUser() user: { schoolId: string },
   ): Promise<ResultTemplate> {
-    return this.templatesService.getResolvedTemplateForClass(classId, user.schoolId);
+    return this.templatesService.getResolvedTemplateForClass(
+      classId,
+      user.schoolId,
+    );
   }
 
   @Query(() => String)

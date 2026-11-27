@@ -30,7 +30,7 @@ export class RegisterSchoolInput {
   gender?: string;
 
   @Field(() => String)
-  @IsEmail({}, { message: "Please enter a valid email address" })
+  @IsEmail({}, { message: 'Please enter a valid email address' })
   @IsNotEmpty({ message: "Please enter the administrator's email address" })
   adminEmail: string;
 

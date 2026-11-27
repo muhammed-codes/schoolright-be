@@ -83,7 +83,9 @@ export class ExpenseRequestsService {
     if (!category) throw new NotFoundException('Selected category not found');
 
     if (input.estimatedAmount <= 0) {
-      throw new BadRequestException('The estimated amount must be greater than 0');
+      throw new BadRequestException(
+        'The estimated amount must be greater than 0',
+      );
     }
 
     // For Reimbursement, receipt is highly recommended

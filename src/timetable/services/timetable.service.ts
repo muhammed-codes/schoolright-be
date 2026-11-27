@@ -126,14 +126,14 @@ export class TimetableService implements OnModuleInit {
         (day) => !Number.isInteger(day) || day < 1 || day > 7,
       )
     ) {
-      throw new BadRequestException('Please select valid days from Monday to Sunday.');
+      throw new BadRequestException(
+        'Please select valid days from Monday to Sunday.',
+      );
     }
 
     const uniqueClassIds = new Set(input.classIds || []);
     if (uniqueClassIds.size !== (input.classIds || []).length) {
-      throw new BadRequestException(
-        'Each class can only be selected once.',
-      );
+      throw new BadRequestException('Each class can only be selected once.');
     }
     if (uniqueClassIds.size > 0) {
       const matchingClasses = await this.classRepo.count({
@@ -460,7 +460,9 @@ export class TimetableService implements OnModuleInit {
     classIds: string[] = [],
   ): Promise<void> {
     if (startTime >= endTime) {
-      throw new BadRequestException('The start time must be before the end time.');
+      throw new BadRequestException(
+        'The start time must be before the end time.',
+      );
     }
 
     // 1. Check against school operating hours

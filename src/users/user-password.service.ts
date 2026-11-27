@@ -101,7 +101,9 @@ export class UserPasswordService {
 
   private validatePassword = (password: string) => {
     if (typeof password !== 'string' || password.length < 6) {
-      throw new BadRequestException('Password must be at least 6 characters long');
+      throw new BadRequestException(
+        'Password must be at least 6 characters long',
+      );
     }
   };
 

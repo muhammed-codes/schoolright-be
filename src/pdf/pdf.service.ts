@@ -330,11 +330,15 @@ export class PdfService {
                 score.totalScore != null,
             )
             .map((score) => {
-              let configuredComponents: ScoreComponentData[] = fallbackComponents.map((component) => ({
-                component: component.component,
-                maxScore: component.maxScore,
-              }));
-              if (configuredComponents.length === 0 && (score.scores || []).length > 0) {
+              let configuredComponents: ScoreComponentData[] =
+                fallbackComponents.map((component) => ({
+                  component: component.component,
+                  maxScore: component.maxScore,
+                }));
+              if (
+                configuredComponents.length === 0 &&
+                (score.scores || []).length > 0
+              ) {
                 configuredComponents = (score.scores || []).map((cs) => ({
                   component: cs.component,
                   maxScore: cs.score > 40 ? 60 : 20,
@@ -581,28 +585,30 @@ export class PdfService {
                 const combinedHtml = reportCardsHtml.join(
                   '<div style="page-break-before: always;"></div>',
                 );
-                return this.generatePdfFromHtml(combinedHtml).then((pdfBuffer) => {
-              const filename = `bulk_report_cards_${resultSheetId}_${Date.now()}`;
-              return this.uploadService
-                .uploadBuffer(
-                  pdfBuffer,
-                  `schools/${schoolId}/report-cards`,
-                  filename,
-                  { format: 'pdf', resourceType: 'raw' },
-                )
-                .then(
-                  (uploadResult) =>
-                    uploadResult.pdfPrivateUrl || uploadResult.url || '',
-                )
-                .catch((err) => {
-                  this.logger.warn(
-                    `Cloudinary upload failed for bulk report card PDF, returning base64 Data URI: ${err}`,
-                  );
-                  return `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
-                });
-            });
+                return this.generatePdfFromHtml(combinedHtml).then(
+                  (pdfBuffer) => {
+                    const filename = `bulk_report_cards_${resultSheetId}_${Date.now()}`;
+                    return this.uploadService
+                      .uploadBuffer(
+                        pdfBuffer,
+                        `schools/${schoolId}/report-cards`,
+                        filename,
+                        { format: 'pdf', resourceType: 'raw' },
+                      )
+                      .then(
+                        (uploadResult) =>
+                          uploadResult.pdfPrivateUrl || uploadResult.url || '',
+                      )
+                      .catch((err) => {
+                        this.logger.warn(
+                          `Cloudinary upload failed for bulk report card PDF, returning base64 Data URI: ${err}`,
+                        );
+                        return `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
+                      });
+                  },
+                );
+              });
           });
-        });
       });
   };
 }

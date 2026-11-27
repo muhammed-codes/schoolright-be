@@ -405,15 +405,18 @@ const renderSubjectTable = (
       </tr>
     </thead>
     <tbody>
-      ${subjects.length === 0 ? `
+      ${
+        subjects.length === 0
+          ? `
         <tr>
           <td colspan="${scoreComponents.length + 3}" style="padding: 12px; text-align: center; color: ${BRAND.textMuted}; font-style: italic;">
             No subject scores recorded
           </td>
         </tr>
-      ` : subjects
-        .map(
-          (score) => `
+      `
+          : subjects
+              .map(
+                (score) => `
         <tr>
           <td class="subj-name">${esc(score.name)}</td>
           ${score.componentScores
@@ -422,8 +425,9 @@ const renderSubjectTable = (
           <td class="subj-total">${score.totalScore != null ? score.totalScore : '-'}</td>
           <td style="font-weight:800;color:${gradeColor(score.grade)};">${esc(score.grade ?? '-')}</td>
         </tr>`,
-        )
-        .join('')}
+              )
+              .join('')
+      }
     </tbody>
   </table>
 `;

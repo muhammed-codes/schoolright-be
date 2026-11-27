@@ -174,17 +174,23 @@ export class ExpensesService {
     user: User,
   ): Promise<Expense> => {
     const schoolId = user.schoolId;
-    if (!schoolId) throw new ForbiddenException('You must belong to a school to perform this action');
+    if (!schoolId)
+      throw new ForbiddenException(
+        'You must belong to a school to perform this action',
+      );
 
     // Validate category
     const category = await this.categoryRepo.findOne({
       where: { id: input.categoryId, schoolId },
     });
-    if (!category) throw new NotFoundException('The selected category could not be found');
+    if (!category)
+      throw new NotFoundException('The selected category could not be found');
 
     // Amount validation
     if (input.amount <= 0) {
-      throw new BadRequestException('The expense amount must be greater than 0');
+      throw new BadRequestException(
+        'The expense amount must be greater than 0',
+      );
     }
 
     const amountPaid =
@@ -262,7 +268,9 @@ export class ExpensesService {
     });
     if (!expense) throw new NotFoundException('Expense not found');
     if (expense.isVoided) {
-      throw new BadRequestException('This expense has already been voided and cannot be updated');
+      throw new BadRequestException(
+        'This expense has already been voided and cannot be updated',
+      );
     }
 
     if (input.title !== undefined) expense.title = input.title.trim();

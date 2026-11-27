@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateResultTemplatesAndSnapshots1794300000000
-  implements MigrationInterface
-{
+export class CreateResultTemplatesAndSnapshots1794300000000 implements MigrationInterface {
   name = 'CreateResultTemplatesAndSnapshots1794300000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -62,11 +60,21 @@ export class CreateResultTemplatesAndSnapshots1794300000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "result_sheets" DROP COLUMN IF EXISTS "templateConfig";`);
-    await queryRunner.query(`ALTER TABLE "result_sheets" DROP COLUMN IF EXISTS "templateVersion";`);
-    await queryRunner.query(`ALTER TABLE "result_sheets" DROP COLUMN IF EXISTS "templateId";`);
-    await queryRunner.query(`ALTER TABLE "classes" DROP COLUMN IF EXISTS "resultTemplateId";`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "result_template_snapshots";`);
+    await queryRunner.query(
+      `ALTER TABLE "result_sheets" DROP COLUMN IF EXISTS "templateConfig";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "result_sheets" DROP COLUMN IF EXISTS "templateVersion";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "result_sheets" DROP COLUMN IF EXISTS "templateId";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "classes" DROP COLUMN IF EXISTS "resultTemplateId";`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "result_template_snapshots";`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "result_templates";`);
   }
 }

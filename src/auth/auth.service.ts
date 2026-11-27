@@ -79,7 +79,9 @@ export class AuthService {
           this.logger.warn(
             `Registration failed: Email already exists: ${input.email}`,
           );
-          throw new BadRequestException('An account with this email address already exists');
+          throw new BadRequestException(
+            'An account with this email address already exists',
+          );
         }
         return this.hashData(input.password);
       })
@@ -188,7 +190,9 @@ export class AuthService {
             this.logger.warn(
               `Failed refresh token attempt (mismatch) for user ID: ${userId}`,
             );
-throw new ForbiddenException('You do not have permission to perform this action');
+            throw new ForbiddenException(
+              'You do not have permission to perform this action',
+            );
           }
           this.logger.log(`Tokens refreshed for user ID: ${userId}`);
           return this.generateTokens(user).then((tokens) => ({
@@ -225,7 +229,7 @@ throw new ForbiddenException('You do not have permission to perform this action'
             this.logger.warn(
               `Failed login attempt (invalid password): ${email}`,
             );
-throw new UnauthorizedException('Invalid email or password');
+            throw new UnauthorizedException('Invalid email or password');
           }
 
           if (user.role !== UserRole.SUPER_ADMIN && user.schoolId) {
@@ -328,7 +332,9 @@ throw new UnauthorizedException('Invalid email or password');
     return this.usersService.findByResetToken(token).then((user) => {
       if (!user || !user.resetPasswordExpires) {
         this.logger.warn(`Failed password reset attempt (invalid token)`);
-        throw new BadRequestException('The reset token is invalid or has expired');
+        throw new BadRequestException(
+          'The reset token is invalid or has expired',
+        );
       }
 
       if (user.resetPasswordExpires < new Date()) {

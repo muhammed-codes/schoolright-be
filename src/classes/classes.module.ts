@@ -9,7 +9,9 @@ import { Student } from '../students/entities/student.entity';
 import { User } from '../users/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ClassEntity, ClassSubject, Student, User])],
+  imports: [
+    TypeOrmModule.forFeature([ClassEntity, ClassSubject, Student, User]),
+  ],
   providers: [ClassesService, ClassesResolver],
   exports: [ClassesService],
 })

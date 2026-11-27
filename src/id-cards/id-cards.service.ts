@@ -691,7 +691,9 @@ export class IdCardsService implements OnModuleInit {
     }
 
     if (staffList.length === 0) {
-      throw new BadRequestException('No staff records are available to generate ID cards');
+      throw new BadRequestException(
+        'No staff records are available to generate ID cards',
+      );
     }
 
     const { templateDef, entity } = await this.resolveTemplate(

@@ -986,7 +986,8 @@ export class ResultsService {
         (sr.subjectScores || []).forEach((ss) => {
           ss.isSubmitted = true;
           if (!ss.submittedAt) {
-            ss.submittedAt = sheet.approvedAt || (sheet as any).updatedAt || new Date();
+            ss.submittedAt =
+              sheet.approvedAt || (sheet as any).updatedAt || new Date();
           }
         });
       });

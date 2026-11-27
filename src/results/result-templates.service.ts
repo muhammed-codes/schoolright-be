@@ -186,7 +186,11 @@ export class ResultTemplatesService {
     });
 
     if (saved.assignedClassIds.length > 0) {
-      await this.syncClassAssignments(saved.id, saved.assignedClassIds, schoolId);
+      await this.syncClassAssignments(
+        saved.id,
+        saved.assignedClassIds,
+        schoolId,
+      );
     }
 
     return saved;
@@ -229,8 +233,10 @@ export class ResultTemplatesService {
     await this.templateRepo.update(id, {
       name: cleanName,
       description: cleanDesc,
-      isDefault: input.isDefault !== undefined ? input.isDefault : template.isDefault,
-      isActive: input.isActive !== undefined ? input.isActive : template.isActive,
+      isDefault:
+        input.isDefault !== undefined ? input.isDefault : template.isDefault,
+      isActive:
+        input.isActive !== undefined ? input.isActive : template.isActive,
       assignedClassIds:
         input.assignedClassIds !== undefined
           ? input.assignedClassIds
@@ -250,7 +256,11 @@ export class ResultTemplatesService {
     const updated = await this.getTemplateById(id, schoolId);
 
     if (input.assignedClassIds !== undefined) {
-      await this.syncClassAssignments(updated.id, updated.assignedClassIds, schoolId);
+      await this.syncClassAssignments(
+        updated.id,
+        updated.assignedClassIds,
+        schoolId,
+      );
     }
 
     return updated;
@@ -351,7 +361,13 @@ export class ResultTemplatesService {
       .set({ resultTemplateId: undefined })
       .where(
         'schoolId = :schoolId AND resultTemplateId = :templateId AND NOT (id = ANY(:classIds))',
-        { schoolId, templateId, classIds: classIds.length ? classIds : ['00000000-0000-0000-0000-000000000000'] },
+        {
+          schoolId,
+          templateId,
+          classIds: classIds.length
+            ? classIds
+            : ['00000000-0000-0000-0000-000000000000'],
+        },
       )
       .execute();
 

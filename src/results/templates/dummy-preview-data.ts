@@ -6,7 +6,9 @@ export const getRealisticDummyReportCardData = (
 ): ReportCardData => ({
   school: {
     name: customSchoolName || 'Ath-Thabat College International',
-    logoUrl: logoUrl || 'https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=128&auto=format&fit=crop&q=80',
+    logoUrl:
+      logoUrl ||
+      'https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=128&auto=format&fit=crop&q=80',
     stampUrl: null,
     address: '14 Unity Crescent, Victoria Island, Lagos State, Nigeria',
     defaultReportTemplate: 'standard',
@@ -14,7 +16,8 @@ export const getRealisticDummyReportCardData = (
   student: {
     fullName: 'Zainab Fatima Musa',
     admissionNumber: 'STD-26-ATH-004',
-    passportPhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80',
+    passportPhotoUrl:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80',
     currentClass: 'JSS 2A',
     totalStudentsInClass: 34,
   },
