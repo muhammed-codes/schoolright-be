@@ -108,9 +108,13 @@ export const renderCustomIdCardFront = (
 
   const photoBorderRadius = design.photoShape === 'circle'
     ? '50%'
-    : design.photoShape === 'rounded'
-    ? '2.5mm'
-    : '1mm';
+    : design.photoShape === 'rectangle'
+    ? '1mm'
+    : '2mm';
+
+  const showPhoto = design.showPhoto !== false;
+  const showLogo = design.showLogo !== false;
+  const showSchoolName = design.showSchoolName !== false;
 
   return `
     <div class="custom-card-front" style="
@@ -125,44 +129,54 @@ export const renderCustomIdCardFront = (
       position: relative;
       overflow: hidden;
       font-family: ${fontFamily};
-      border-radius: 2mm;
+      border-radius: 2.2mm;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06);
+      border: 0.25mm solid #E2E8F0;
     ">
       <!-- Header Banner -->
       <div style="
         background: ${primaryColor};
         color: #FFFFFF;
-        padding: 2.5mm 3mm;
+        padding: 2.2mm 2.8mm;
         display: flex;
         align-items: center;
         gap: 2mm;
         border-bottom: 0.6mm solid ${accentColor};
+        flex-shrink: 0;
       ">
-        <img src="${logoSrc}" alt="Logo" style="
-          width: 7.5mm;
-          height: 7.5mm;
-          object-fit: contain;
-          border-radius: 1mm;
-          background: #FFFFFF;
-          padding: 0.4mm;
-          flex-shrink: 0;
-        " />
+        ${showLogo ? `
+          <img src="${logoSrc}" alt="Logo" style="
+            width: 8.5mm;
+            height: 8.5mm;
+            object-fit: contain;
+            border-radius: 1mm;
+            background: #FFFFFF;
+            padding: 0.4mm;
+            flex-shrink: 0;
+          " />
+        ` : ''}
         <div style="min-width: 0; flex: 1;">
+          ${showSchoolName ? `
+            <div style="
+              font-size: 2.3mm;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.03em;
+              line-height: 1.15;
+              max-height: 5.6mm;
+              overflow: hidden;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              white-space: normal;
+            ">${schoolName}</div>
+          ` : ''}
           <div style="
-            font-size: 2.6mm;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.1;
-          ">${schoolName}</div>
-          <div style="
-            font-size: 1.6mm;
-            font-weight: 600;
+            font-size: 1.5mm;
+            font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            opacity: 0.9;
+            opacity: 0.95;
             margin-top: 0.3mm;
           ">${cardTitle}</div>
         </div>
@@ -171,70 +185,118 @@ export const renderCustomIdCardFront = (
       <!-- Main Body Area -->
       <div style="
         flex: 1;
-        padding: 2.5mm 3mm;
+        padding: ${isLandscape ? '2.5mm 3.5mm' : '2.2mm 3.2mm 2mm'};
         display: flex;
         flex-direction: ${isLandscape ? 'row' : 'column'};
         align-items: center;
-        justify-content: center;
-        gap: 2.5mm;
+        justify-content: space-between;
+        gap: ${isLandscape ? '3.5mm' : '1.2mm'};
+        box-sizing: border-box;
+        overflow: hidden;
+        min-height: 0;
       ">
-        <!-- Photo -->
-        <div style="
-          width: ${isLandscape ? '22mm' : '20mm'};
-          height: ${isLandscape ? '25mm' : '23mm'};
-          border-radius: ${photoBorderRadius};
-          overflow: hidden;
-          border: 0.6mm solid ${design.photoBorderColor || primaryColor};
-          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-          flex-shrink: 0;
-          background: #f1f5f9;
-        ">
-          <img src="${photoSrc}" alt="${fullName}" style="
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-          " />
-        </div>
+        ${showPhoto ? `
+          <!-- Photo Container -->
+          <div style="
+            width: ${isLandscape ? '24mm' : '25mm'};
+            height: ${isLandscape ? '28mm' : '29mm'};
+            border-radius: ${photoBorderRadius};
+            overflow: hidden;
+            border: 0.7mm solid ${design.photoBorderColor || primaryColor};
+            box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+            flex-shrink: 0;
+            background: #F1F5F9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <img src="${photoSrc}" alt="${fullName}" style="
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+            " />
+          </div>
+        ` : ''}
 
-        <!-- Info Fields -->
+        <!-- Info Fields Area -->
         <div style="
           flex: 1;
           min-width: 0;
-          text-align: ${isLandscape ? 'left' : 'center'};
           width: 100%;
+          text-align: ${isLandscape ? 'left' : 'center'};
+          display: flex;
+          flex-direction: column;
+          align-items: ${isLandscape ? 'flex-start' : 'center'};
+          justify-content: ${isLandscape ? 'center' : 'space-between'};
         ">
+          <!-- Full Name -->
           <div style="
-            font-size: 2.6mm;
+            font-size: 2.9mm;
             font-weight: 800;
             color: ${textColor};
-            line-height: 1.2;
-            margin-bottom: 1.2mm;
+            line-height: 1.15;
             text-transform: uppercase;
+            letter-spacing: 0.02em;
+            max-height: 6.8mm;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            margin-bottom: 0.8mm;
+            width: 100%;
           ">${fullName}</div>
 
+          <!-- Class / Role Badge -->
           <div style="
             display: inline-block;
             background: ${primaryColor};
             color: #FFFFFF;
             font-size: 1.7mm;
             font-weight: 700;
-            padding: 0.5mm 2mm;
+            padding: 0.5mm 2.2mm;
+            border-radius: 0.8mm;
+            margin-bottom: 1.2mm;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            max-width: 95%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          ">${classOrRoleValue}</div>
+
+          <!-- Structured Credential Box -->
+          <div style="
+            width: 100%;
+            background: #F8FAFC;
+            border: 0.25mm solid #E2E8F0;
             border-radius: 1mm;
-            margin-bottom: 1.5mm;
-            letter-spacing: 0.05em;
-          ">${identifierLabel}: ${identifierValue}</div>
+            padding: 1.4mm 2mm;
+            box-sizing: border-box;
+            font-size: 1.6mm;
+            line-height: 1.35;
+          ">
+            ${(design.showAdmissionNumber ?? true) ? `
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6mm;">
+                <span style="font-weight: 600; color: #64748B; text-transform: uppercase; font-size: 1.5mm;">${identifierLabel}:</span>
+                <span style="font-weight: 700; font-family: monospace; color: #0F172A; font-size: 1.6mm;">${identifierValue}</span>
+              </div>
+            ` : ''}
 
-          <div style="font-size: 1.8mm; margin-bottom: 0.5mm; color: #475569;">
-            <span style="font-weight: 600;">${classOrRoleLabel}:</span>
-            <span style="font-weight: 700; color: ${textColor};">${classOrRoleValue}</span>
+            ${(design.showGender ?? true) && (cardData as StudentCardData).gender ? `
+              <div style="display: flex; justify-content: space-between; align-items: center; ${(cardData as StudentCardData).sessionName ? 'margin-bottom: 0.6mm;' : ''}">
+                <span style="font-weight: 600; color: #64748B; text-transform: uppercase; font-size: 1.5mm;">Gender:</span>
+                <span style="font-weight: 700; color: #0F172A; font-size: 1.6mm;">${escapeHtml((cardData as StudentCardData).gender)}</span>
+              </div>
+            ` : ''}
+
+            ${(cardData as StudentCardData).sessionName ? `
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; color: #64748B; text-transform: uppercase; font-size: 1.5mm;">Session:</span>
+                <span style="font-weight: 700; color: #0F172A; font-size: 1.6mm;">${escapeHtml((cardData as StudentCardData).sessionName)}</span>
+              </div>
+            ` : ''}
           </div>
-
-          ${(cardData as StudentCardData).gender ? `
-            <div style="font-size: 1.6mm; color: #64748b;">
-              Gender: <span style="font-weight: 600; color: ${textColor};">${escapeHtml((cardData as StudentCardData).gender)}</span>
-            </div>
-          ` : ''}
         </div>
       </div>
 
@@ -247,8 +309,9 @@ export const renderCustomIdCardFront = (
         justify-content: space-between;
         align-items: center;
         font-size: 1.4mm;
-        font-weight: 600;
+        font-weight: 700;
         letter-spacing: 0.05em;
+        flex-shrink: 0;
       ">
         <span>SCHOOLRIGHT SECURE ID</span>
         <span style="color: ${accentColor};">OFFICIAL CREDENTIAL</span>
@@ -268,15 +331,18 @@ export const renderCustomIdCardBack = (
   const heightMm = isLandscape ? 53.98 : 85.6;
 
   const primaryColor = design.primaryColor || school.primaryColor || '#146356';
+  const secondaryColor = design.secondaryColor || '#0B3830';
+  const accentColor = design.accentColor || '#C89D3C';
   const bgColor = design.backBackgroundColor || '#F8FAFC';
   const textColor = design.backTextColor || '#1E293B';
   const fontFamily = design.fontFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
+  const schoolName = escapeHtml(design.customSchoolName || school.name || 'SchoolRight');
   const schoolAddress = escapeHtml(design.customAddress || school.address || 'School Premises');
   const termsText = escapeHtml(
     design.termsText ||
       options.customNote ||
-      'This identity card is the property of the school. If found, please return to the school administration office or contact school security immediately.'
+      'This identity card is the official property of the school. If found, please return to the school administration office or contact school security immediately.'
   );
 
   return `
@@ -289,74 +355,137 @@ export const renderCustomIdCardBack = (
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 3mm;
       position: relative;
       overflow: hidden;
       font-family: ${fontFamily};
-      border-radius: 2mm;
+      border-radius: 2.2mm;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06);
+      border: 0.25mm solid #E2E8F0;
       font-size: 1.6mm;
-      line-height: 1.3;
+      line-height: 1.35;
     ">
-      <!-- Terms and Conditions -->
-      <div>
-        <div style="
-          font-size: 1.8mm;
-          font-weight: 800;
-          text-transform: uppercase;
-          color: ${primaryColor};
-          margin-bottom: 1.2mm;
-          letter-spacing: 0.05em;
-          border-bottom: 0.3mm solid #cbd5e1;
-          padding-bottom: 0.5mm;
-        ">Terms & Conditions</div>
-        <p style="color: #475569; font-size: 1.5mm; margin: 0 0 2mm;">${termsText}</p>
-        ${options.showSchoolAddress && schoolAddress ? `
-          <div style="font-size: 1.4mm; color: #64748b; margin-top: 1mm;">
-            <strong>Address:</strong> ${schoolAddress}
-          </div>
-        ` : ''}
-      </div>
-
-      <!-- QR / Barcode & Signatures Area -->
+      <!-- Back Header Banner -->
       <div style="
+        background: ${primaryColor};
+        color: #FFFFFF;
+        padding: 2mm 3mm;
+        font-size: 1.6mm;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
-        padding-top: 2mm;
-        border-top: 0.3mm solid #cbd5e1;
+        align-items: center;
+        border-bottom: 0.5mm solid ${accentColor};
+        flex-shrink: 0;
       ">
-        ${options.showQrCode && options.qrCodeDataUrl ? `
-          <div style="text-align: center;">
-            <img src="${options.qrCodeDataUrl}" alt="QR" style="
-              width: 13mm;
-              height: 13mm;
-              display: block;
-              border: 0.3mm solid #e2e8f0;
-              background: #FFFFFF;
-              padding: 0.4mm;
-            " />
-            <div style="font-size: 1.2mm; color: #64748b; margin-top: 0.3mm;">VERIFY ID</div>
-          </div>
-        ` : '<div></div>'}
+        <span>${schoolName}</span>
+        <span style="opacity: 0.9; font-size: 1.35mm;">Terms & Verification</span>
+      </div>
 
-        ${options.showPrincipalSignature ? `
-          <div style="text-align: center; min-width: 22mm;">
-            ${school.stampUrl ? `
-              <img src="${sanitizeUrl(school.stampUrl)}" alt="Stamp" style="
-                max-height: 8mm;
-                margin-bottom: -3mm;
-                opacity: 0.8;
-                display: block;
-                margin-left: auto;
-                margin-right: auto;
-              " />
+      <!-- Main Back Body Area -->
+      <div style="
+        flex: 1;
+        padding: 2.5mm 3.2mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-sizing: border-box;
+      ">
+        <!-- Terms and Institutional Instructions -->
+        <div>
+          <div style="
+            font-size: 1.7mm;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: ${primaryColor};
+            margin-bottom: 1mm;
+            letter-spacing: 0.04em;
+          ">Cardholder Terms</div>
+          <p style="color: #475569; font-size: 1.45mm; line-height: 1.35; margin: 0 0 1.5mm;">
+            ${termsText}
+          </p>
+
+          <!-- Campus and Emergency Info Box -->
+          <div style="
+            background: #FFFFFF;
+            border: 0.25mm solid #E2E8F0;
+            border-radius: 0.8mm;
+            padding: 1.2mm 2mm;
+            font-size: 1.4mm;
+            color: #334155;
+            line-height: 1.3;
+          ">
+            ${(design.showAddress !== false) && schoolAddress ? `
+              <div><strong>Campus:</strong> ${schoolAddress}</div>
             ` : ''}
-            <div style="border-bottom: 0.4mm solid #475569; width: 22mm; margin: 0 auto 0.5mm;"></div>
-            <div style="font-size: 1.3mm; font-weight: 700; text-transform: uppercase; color: #334155;">
-              ${escapeHtml(design.signatureTitle || 'Authorized Signature')}
-            </div>
+            ${school.phone ? `
+              <div style="margin-top: 0.3mm;"><strong>Emergency Contact:</strong> ${escapeHtml(school.phone)}</div>
+            ` : ''}
+            ${school.email ? `
+              <div style="margin-top: 0.3mm;"><strong>Email:</strong> ${escapeHtml(school.email)}</div>
+            ` : ''}
           </div>
-        ` : ''}
+        </div>
+
+        <!-- QR / Barcode & Signatures Area -->
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          padding-top: 1.5mm;
+          border-top: 0.3mm solid #E2E8F0;
+          margin-top: 1.5mm;
+        ">
+          ${(design.showBarcodeOrQr !== false) && options.qrCodeDataUrl ? `
+            <div style="text-align: center;">
+              <img src="${options.qrCodeDataUrl}" alt="QR" style="
+                width: 14mm;
+                height: 14mm;
+                display: block;
+                border: 0.25mm solid #CBD5E1;
+                background: #FFFFFF;
+                padding: 0.4mm;
+                border-radius: 0.6mm;
+              " />
+              <div style="font-size: 1.2mm; font-weight: 700; color: #64748B; margin-top: 0.4mm; letter-spacing: 0.04em;">SCAN TO VERIFY</div>
+            </div>
+          ` : '<div></div>'}
+
+          ${(design.showPrincipalSignature !== false) ? `
+            <div style="text-align: center; min-width: 24mm;">
+              ${school.stampUrl ? `
+                <img src="${sanitizeUrl(school.stampUrl)}" alt="Stamp" style="
+                  max-height: 8mm;
+                  margin-bottom: -3mm;
+                  opacity: 0.8;
+                  display: block;
+                  margin-left: auto;
+                  margin-right: auto;
+                " />
+              ` : ''}
+              <div style="border-bottom: 0.4mm solid #475569; width: 24mm; margin: 0 auto 0.5mm;"></div>
+              <div style="font-size: 1.3mm; font-weight: 700; text-transform: uppercase; color: #334155; letter-spacing: 0.02em;">
+                ${escapeHtml(design.signatureTitle || 'Authorized Signature')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Bottom Security Strip -->
+      <div style="
+        background: ${secondaryColor};
+        color: #94A3B8;
+        padding: 1mm 3mm;
+        text-align: center;
+        font-size: 1.2mm;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        flex-shrink: 0;
+      ">
+        Non-transferable &bull; Official Institutional Credential
       </div>
     </div>
   `;

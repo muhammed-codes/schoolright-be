@@ -64,6 +64,7 @@ import {
   renderReceiptHtml,
   ReceiptRenderData,
   ReceiptItemData,
+  getDefaultLogoSvg,
 } from './templates/receipt-renderer';
 
 import { ClassEntity } from '../classes/entities/class.entity';
@@ -2252,11 +2253,16 @@ export class FeesService {
     const dummyData: ReceiptRenderData = {
       school: {
         name: school?.name || 'SchoolRight Academy',
-        logoUrl: school?.logoUrl || null,
+        logoUrl:
+          school?.logoUrl ||
+          getDefaultLogoSvg(
+            school?.name || 'SchoolRight Academy',
+            resolvedConfig.branding?.primaryColor,
+          ),
         stampUrl: school?.stampUrl || null,
         address: school?.address || 'Plot 123 Education Boulevard, Victoria Island, Lagos',
-        phone: school?.phone || '+234 800 123 4567',
-        email: school?.email || 'bursar@schoolright.ng',
+        phone: school?.phone || '+234 800 000 0000',
+        email: school?.email || 'accounts@school.edu',
       },
       student: {
         fullName: 'Chukwuebuka Daniel Okafor',

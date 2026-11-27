@@ -73,6 +73,18 @@ const formatDate = (dateInput?: Date | string): string => {
   });
 };
 
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+export const getDefaultLogoSvg = (name: string, primaryColor = '#146356'): string => {
+  const initials = escapeHtml(getInitials(name || 'SR'));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="${primaryColor}"/><text x="32" y="38" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="22" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">${initials}</text></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+};
+
 const numberToWords = (num: number): string => {
   if (num === 0) return 'Zero Naira Only';
   const a = [
@@ -117,6 +129,7 @@ export const renderReceiptHtml = (
   const fontFamily = branding.fontFamily || 'Inter, system-ui, -apple-system, sans-serif';
 
   const amountInWords = numberToWords(data.payment.amount);
+  const resolvedLogoUrl = data.school.logoUrl || getDefaultLogoSvg(schoolName, primaryColor);
 
   if (isThermal) {
     return `<!DOCTYPE html>
@@ -140,7 +153,7 @@ export const renderReceiptHtml = (
     .text-right { text-align: right; }
     .bold { font-weight: bold; }
     .divider { border-bottom: 1px dashed #000; margin: 6px 0; }
-    .header-logo { max-width: 50px; max-height: 50px; margin: 0 auto 4px; display: block; }
+    .header-logo { max-width: 50px; max-height: 50px; margin: 0 auto 4px; display: block; border-radius: 4px; }
     .title { font-size: 13px; font-weight: bold; margin: 3px 0; text-transform: uppercase; }
     .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
     .items-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
@@ -150,7 +163,7 @@ export const renderReceiptHtml = (
 </head>
 <body>
   <div class="text-center">
-    ${branding.showLogo && data.school.logoUrl ? `<img src="${escapeHtml(data.school.logoUrl)}" class="header-logo" alt="Logo" />` : ''}
+    ${branding.showLogo ? `<img src="${escapeHtml(resolvedLogoUrl)}" class="header-logo" alt="Logo" />` : ''}
     ${branding.showSchoolName ? `<div class="bold" style="font-size: 13px;">${escapeHtml(schoolName)}</div>` : ''}
     ${branding.showAddress && schoolAddress ? `<div style="font-size: 10px;">${escapeHtml(schoolAddress)}</div>` : ''}
     ${branding.showContactInfo && contactText ? `<div style="font-size: 9.5px;">${escapeHtml(contactText)}</div>` : ''}
@@ -264,6 +277,7 @@ export const renderReceiptHtml = (
       width: ${branding.logoWidth || 64}px;
       height: ${branding.logoWidth || 64}px;
       object-fit: contain;
+      border-radius: 6px;
     }
     .school-name {
       font-size: 20px;
@@ -423,7 +437,7 @@ export const renderReceiptHtml = (
     <!-- Header Section -->
     <div class="header-bar">
       <div class="branding-section">
-        ${branding.showLogo && data.school.logoUrl ? `<img src="${escapeHtml(data.school.logoUrl)}" class="school-logo" alt="Logo" />` : ''}
+        ${branding.showLogo ? `<img src="${escapeHtml(resolvedLogoUrl)}" class="school-logo" alt="Logo" />` : ''}
         <div>
           ${branding.showSchoolName ? `<div class="school-name">${escapeHtml(schoolName)}</div>` : ''}
           ${branding.showAddress && schoolAddress ? `<div class="school-meta">${escapeHtml(schoolAddress)}</div>` : ''}
