@@ -202,7 +202,7 @@ export class AttendanceService {
         ? this.classRepo.findOne({ where: { id: classId } })
         : this.classRepo.findOne({ where: { id: classId, schoolId } });
 
-    return classLookup.then((classEntity) => {
+    return classLookup.then(async (classEntity) => {
       if (!classEntity) {
         throw new NotFoundException('Class not found');
       }
@@ -210,12 +210,21 @@ export class AttendanceService {
       const canViewAllClassAttendance =
         role === UserRole.SUPER_ADMIN ||
         role === UserRole.SCHOOL_ADMIN ||
-        role === UserRole.PRINCIPAL;
+        role === UserRole.PRINCIPAL ||
+        role === UserRole.VICE_PRINCIPAL ||
+        role === UserRole.HEAD_TEACHER;
 
-      if (!canViewAllClassAttendance && classEntity.classTeacherId !== userId) {
-        throw new ForbiddenException(
-          'You can only view attendance for your assigned class',
+      if (!canViewAllClassAttendance && userId && role) {
+        const allowedIds = await this.getTeacherAssignedClassIds(
+          userId,
+          schoolId,
+          role,
         );
+        if (allowedIds !== null && !allowedIds.includes(classId)) {
+          throw new ForbiddenException(
+            'You can only view attendance for your assigned class',
+          );
+        }
       }
 
       return this.studentAttendanceRepo.find({
@@ -389,9 +398,9 @@ export class AttendanceService {
       });
   };
 
-  getStaffAttendanceLog = (schoolId: string, date: string) => {
+  getStaffAttendanceLog = (schoolId: string, date: string, userId?: string) => {
     return this.staffAttendanceRepo.find({
-      where: { schoolId, date },
+      where: userId ? { schoolId, date, userId } : { schoolId, date },
       relations: ['user'],
       order: { clockInTime: 'ASC' },
     });
@@ -413,20 +422,68 @@ export class AttendanceService {
     });
   };
 
-  getUnmarkedClasses = (schoolId: string, date: string) => {
-    return this.classRepo
-      .find({ where: { schoolId }, relations: ['classTeacher'] })
-      .then((classes) => {
-        return this.studentAttendanceRepo
-          .find({
-            where: { schoolId, date },
-            select: ['classId'],
-          })
-          .then((records) => {
-            const markedClassIds = new Set(records.map((r) => r.classId));
-            return classes.filter((c) => !markedClassIds.has(c.id));
-          });
-      });
+  private async getTeacherAssignedClassIds(
+    userId: string,
+    schoolId: string,
+    role: UserRole,
+  ): Promise<string[] | null> {
+    if (role === UserRole.CLASS_TEACHER) {
+      const classes = await this.classRepo
+        .createQueryBuilder('c')
+        .select(['c.id'])
+        .where('c.schoolId = :schoolId', { schoolId })
+        .andWhere(
+          '(c.classTeacherId = :userId OR :userId = ANY(c."classTeacherIds"))',
+          { userId },
+        )
+        .getMany();
+      return classes.map((c) => c.id);
+    }
+    if (role === UserRole.SUBJECT_TEACHER) {
+      const rows = await this.classRepo.manager.query<
+        Array<{ classId: string }>
+      >(
+        'SELECT DISTINCT "classId" FROM class_subjects WHERE "schoolId" = $1 AND ("subjectTeacherId" = $2 OR $2 = ANY("teacherIds"))',
+        [schoolId, userId],
+      );
+      return rows.map((r) => r.classId);
+    }
+    return null;
+  }
+
+  getUnmarkedClasses = async (
+    schoolId: string,
+    date: string,
+    userId?: string,
+    role?: UserRole,
+  ) => {
+    let allowedClassIds: string[] | null = null;
+    if (userId && role) {
+      allowedClassIds = await this.getTeacherAssignedClassIds(
+        userId,
+        schoolId,
+        role,
+      );
+      if (allowedClassIds !== null && allowedClassIds.length === 0) {
+        return [];
+      }
+    }
+
+    const classes = await this.classRepo.find({
+      where: { schoolId },
+      relations: ['classTeacher'],
+    });
+    const scopedClasses =
+      allowedClassIds !== null
+        ? classes.filter((c) => allowedClassIds.includes(c.id))
+        : classes;
+
+    const records = await this.studentAttendanceRepo.find({
+      where: { schoolId, date },
+      select: ['classId'],
+    });
+    const markedClassIds = new Set(records.map((r) => r.classId));
+    return scopedClasses.filter((c) => !markedClassIds.has(c.id));
   };
 
   generateStaffQrCode = (schoolId: string) => {
@@ -497,14 +554,19 @@ export class AttendanceService {
   getStaffAttendanceOverview = async (
     schoolId: string,
     date: string,
+    restrictToUserId?: string,
   ): Promise<StaffAttendanceOverview> => {
     const teachers = await this.userRepo.find({
-      where: { schoolId, role: Not(UserRole.PARENT) },
+      where: restrictToUserId
+        ? { id: restrictToUserId, schoolId, role: Not(UserRole.PARENT) }
+        : { schoolId, role: Not(UserRole.PARENT) },
       order: { firstName: 'ASC' },
     });
 
     const logs = await this.staffAttendanceRepo.find({
-      where: { schoolId, date },
+      where: restrictToUserId
+        ? { schoolId, date, userId: restrictToUserId }
+        : { schoolId, date },
       relations: ['user'],
     });
 
@@ -556,12 +618,27 @@ export class AttendanceService {
   getClassAttendanceOverview = async (
     schoolId: string,
     date: string,
+    userId?: string,
+    role?: UserRole,
   ): Promise<ClassAttendanceOverview> => {
-    const classes = await this.classRepo.find({
+    let allowedClassIds: string[] | null = null;
+    if (userId && role) {
+      allowedClassIds = await this.getTeacherAssignedClassIds(
+        userId,
+        schoolId,
+        role,
+      );
+    }
+
+    const allClasses = await this.classRepo.find({
       where: { schoolId },
       relations: ['classTeacher'],
       order: { name: 'ASC' },
     });
+    const classes =
+      allowedClassIds !== null
+        ? allClasses.filter((c) => allowedClassIds.includes(c.id))
+        : allClasses;
 
     const attendanceRecords = await this.studentAttendanceRepo.find({
       where: { schoolId, date },

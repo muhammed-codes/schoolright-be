@@ -4,7 +4,6 @@ import { JwtAuthGuard, PermissionGuard, RolesGuard } from '../common/guards';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { AppResource } from '../access/enums/resource.enum';
 import { PermissionAction } from '../access/enums/permission-action.enum';
-import { User } from '../users/entities/user.entity';
 import { IdCardsService } from './id-cards.service';
 import { IdCardTemplate } from './entities/id-card-template.entity';
 import { SchoolIdCardSettings } from './entities/school-id-card-settings.entity';
@@ -146,9 +145,12 @@ export class IdCardsResolver {
   @RequirePermission(AppResource.ID_CARDS, PermissionAction.READ)
   renderStudentIdCard(
     @Args('input') input: RenderStudentIdCardInput,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: string },
   ): Promise<IdCardRenderResult> {
-    return this.idCardsService.renderStudentCard(user.schoolId, input);
+    return this.idCardsService.renderStudentCard(user.schoolId, input, {
+      userId: user.sub,
+      role: user.role,
+    });
   }
 
   @Query(() => IdCardRenderResult, {
@@ -170,9 +172,12 @@ export class IdCardsResolver {
   @RequirePermission(AppResource.ID_CARDS, PermissionAction.READ)
   renderBatchStudentIdCards(
     @Args('input') input: RenderBatchStudentIdCardsInput,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: string },
   ): Promise<IdCardRenderResult> {
-    return this.idCardsService.renderBatchStudentCards(user.schoolId, input);
+    return this.idCardsService.renderBatchStudentCards(user.schoolId, input, {
+      userId: user.sub,
+      role: user.role,
+    });
   }
 
   @Query(() => IdCardRenderResult, {
@@ -194,9 +199,12 @@ export class IdCardsResolver {
   @RequirePermission(AppResource.ID_CARDS, PermissionAction.GENERATE)
   generateStudentIdCardPdf(
     @Args('input') input: GenerateStudentIdCardPdfInput,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: string },
   ): Promise<IdCardPdfResult> {
-    return this.idCardsService.generateStudentCardPdf(user.schoolId, input);
+    return this.idCardsService.generateStudentCardPdf(user.schoolId, input, {
+      userId: user.sub,
+      role: user.role,
+    });
   }
 
   @Mutation(() => IdCardPdfResult, {
@@ -219,11 +227,12 @@ export class IdCardsResolver {
   @RequirePermission(AppResource.ID_CARDS, PermissionAction.GENERATE)
   generateBatchStudentIdCardsPdf(
     @Args('input') input: GenerateBatchStudentIdCardsPdfInput,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: string },
   ): Promise<IdCardPdfResult> {
     return this.idCardsService.generateBatchStudentCardsPdf(
       user.schoolId,
       input,
+      { userId: user.sub, role: user.role },
     );
   }
 

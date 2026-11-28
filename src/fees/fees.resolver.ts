@@ -384,6 +384,8 @@ export class FeesResolver {
       user.schoolId,
       filter,
       pagination,
+      user.sub,
+      user.role,
     );
   }
 
@@ -481,6 +483,7 @@ export class FeesResolver {
       search,
       status,
       sortBy,
+      user.sub,
     );
   }
 
@@ -618,6 +621,8 @@ export class FeesResolver {
       user.schoolId,
       status,
       search,
+      user.sub,
+      user.role,
     );
   }
 
@@ -724,10 +729,7 @@ export class FeesResolver {
   @Query(() => ReceiptTemplate, { nullable: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @RequirePermission(AppResource.FEES, PermissionAction.READ)
-  receiptTemplate(
-    @Args('id') id: string,
-    @CurrentUser() user: AuthUser,
-  ) {
+  receiptTemplate(@Args('id') id: string, @CurrentUser() user: AuthUser) {
     return this.feesService.getReceiptTemplateById(id, user.schoolId);
   }
 
@@ -787,10 +789,7 @@ export class FeesResolver {
   @Mutation(() => Boolean)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @RequirePermission(AppResource.FEES, PermissionAction.DELETE)
-  deleteReceiptTemplate(
-    @Args('id') id: string,
-    @CurrentUser() user: AuthUser,
-  ) {
+  deleteReceiptTemplate(@Args('id') id: string, @CurrentUser() user: AuthUser) {
     return this.feesService.deleteReceiptTemplate(id, user.schoolId);
   }
 

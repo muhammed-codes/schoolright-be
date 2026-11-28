@@ -4,6 +4,7 @@ import { User } from '../users/entities/user.entity';
 import { Student } from '../students/entities/student.entity';
 import { School } from '../schools/entities/school.entity';
 import { ClassEntity } from '../classes/entities/class.entity';
+import { ClassSubject } from '../classes/entities/class-subject.entity';
 import { IdCardTemplate } from './entities/id-card-template.entity';
 import { SchoolIdCardSettings } from './entities/school-id-card-settings.entity';
 import { IdCardsService } from './id-cards.service';
@@ -21,6 +22,7 @@ import { UploadModule } from '../upload/upload.module';
       Student,
       School,
       ClassEntity,
+      ClassSubject,
     ]),
     SchoolsModule,
     PdfModule,

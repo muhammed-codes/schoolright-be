@@ -109,14 +109,29 @@ export class AttendanceResolver {
     );
   }
 
+  private isAdminOrManagement(role: UserRole): boolean {
+    return (
+      role === UserRole.SUPER_ADMIN ||
+      role === UserRole.SCHOOL_ADMIN ||
+      LEADERSHIP_ROLES.includes(role)
+    );
+  }
+
   @Query(() => [StaffAttendance])
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
   staffAttendanceLog(
     @Args('date') date: string,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
-    return this.attendanceService.getStaffAttendanceLog(user.schoolId, date);
+    const restrictToUserId = this.isAdminOrManagement(user.role)
+      ? undefined
+      : user.sub;
+    return this.attendanceService.getStaffAttendanceLog(
+      user.schoolId,
+      date,
+      restrictToUserId,
+    );
   }
 
   @Query(() => [StaffAttendance])
@@ -146,9 +161,14 @@ export class AttendanceResolver {
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
   unmarkedClasses(
     @Args('date') date: string,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
-    return this.attendanceService.getUnmarkedClasses(user.schoolId, date);
+    return this.attendanceService.getUnmarkedClasses(
+      user.schoolId,
+      date,
+      user.sub,
+      user.role,
+    );
   }
 
   @Query(() => StaffAttendanceOverview)
@@ -156,11 +176,15 @@ export class AttendanceResolver {
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
   staffAttendanceOverview(
     @Args('date') date: string,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
+    const restrictToUserId = this.isAdminOrManagement(user.role)
+      ? undefined
+      : user.sub;
     return this.attendanceService.getStaffAttendanceOverview(
       user.schoolId,
       date,
+      restrictToUserId,
     );
   }
 
@@ -169,11 +193,13 @@ export class AttendanceResolver {
   @RequirePermission(AppResource.ATTENDANCE, PermissionAction.READ)
   classAttendanceOverview(
     @Args('date') date: string,
-    @CurrentUser() user: { schoolId: string },
+    @CurrentUser() user: { sub: string; schoolId: string; role: UserRole },
   ) {
     return this.attendanceService.getClassAttendanceOverview(
       user.schoolId,
       date,
+      user.sub,
+      user.role,
     );
   }
 

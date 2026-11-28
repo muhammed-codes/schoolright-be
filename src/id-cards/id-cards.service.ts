@@ -8,13 +8,14 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, IsNull } from 'typeorm';
+import { FindOptionsWhere, Repository, In, IsNull } from 'typeorm';
 import * as QRCode from 'qrcode';
 
 import { User } from '../users/entities/user.entity';
 import { Student } from '../students/entities/student.entity';
 import { School } from '../schools/entities/school.entity';
 import { ClassEntity } from '../classes/entities/class.entity';
+import { ClassSubject } from '../classes/entities/class-subject.entity';
 import { IdCardTemplate } from './entities/id-card-template.entity';
 import { SchoolIdCardSettings } from './entities/school-id-card-settings.entity';
 import { SchoolsService } from '../schools/schools.service';
@@ -61,6 +62,13 @@ import {
   renderCustomIdCardBack,
   parseDesignConfiguration,
 } from './templates/custom-id-card.template';
+import { UserRole } from '../common/enums/role.enum';
+
+/** Caller context used to scope student ID card queries for teachers. */
+export interface IdCardsUserContext {
+  userId: string;
+  role: string;
+}
 
 @Injectable()
 export class IdCardsService implements OnModuleInit {
@@ -79,6 +87,8 @@ export class IdCardsService implements OnModuleInit {
     private readonly schoolRepo: Repository<School>,
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    @InjectRepository(ClassSubject)
+    private readonly classSubjectRepo: Repository<ClassSubject>,
     private readonly schoolsService: SchoolsService,
     private readonly pdfService: PdfService,
     private readonly uploadService: UploadService,
@@ -151,7 +161,7 @@ export class IdCardsService implements OnModuleInit {
         .getMany();
     }
 
-    const where: any = { isActive: true };
+    const where: FindOptionsWhere<IdCardTemplate> = { isActive: true };
     if (cardType) where.cardType = cardType;
     return this.templateRepo.find({
       where,
@@ -282,7 +292,10 @@ export class IdCardsService implements OnModuleInit {
     schoolId: string,
   ): Promise<IdCardTemplate> => {
     const original = await this.templateRepo.findOne({
-      where: [{ id, schoolId }, { id, schoolId: IsNull() }],
+      where: [
+        { id, schoolId },
+        { id, schoolId: IsNull() },
+      ],
     });
     if (!original) {
       throw new NotFoundException('Template to duplicate not found');
@@ -628,9 +641,7 @@ export class IdCardsService implements OnModuleInit {
 
     const templateDef = getTemplateDefinition(entity.key);
     if (!templateDef) {
-      const customDesign = parseDesignConfiguration(
-        entity.designConfiguration,
-      );
+      const customDesign = parseDesignConfiguration(entity.designConfiguration);
       const dynamicDef: TemplateDefinition = {
         key: entity.key,
         name: entity.name,
@@ -706,12 +717,88 @@ export class IdCardsService implements OnModuleInit {
   };
 
   /**
+   * Returns the class IDs that the given teacher is assigned to (class teacher or subject teacher).
+   * Returns null if the user is not a teacher role (meaning no restriction applies).
+   */
+  private getTeacherClassIds = async (
+    userId: string,
+    schoolId: string,
+    role: string,
+  ): Promise<string[] | null> => {
+    const roleEnum = role as UserRole;
+    const isClassTeacher = roleEnum === UserRole.CLASS_TEACHER;
+    const isSubjectTeacher = roleEnum === UserRole.SUBJECT_TEACHER;
+    if (!isClassTeacher && !isSubjectTeacher) return null;
+
+    const classIds = new Set<string>();
+
+    if (isClassTeacher) {
+      const classes = await this.classRepo.find({
+        select: ['id'],
+        where: { schoolId },
+      });
+      for (const cls of classes) {
+        const entity = await this.classRepo.findOne({ where: { id: cls.id } });
+        if (!entity) continue;
+        const teachers = entity.classTeacherIds?.length
+          ? entity.classTeacherIds
+          : entity.classTeacherId
+            ? [entity.classTeacherId]
+            : [];
+        if (teachers.includes(userId)) classIds.add(cls.id);
+      }
+    }
+
+    if (isSubjectTeacher) {
+      const subjects = await this.classSubjectRepo.find({
+        select: ['classId'],
+        where: { schoolId },
+      });
+      for (const cs of subjects) {
+        const entity = await this.classSubjectRepo.findOne({
+          where: { classId: cs.classId, schoolId },
+          select: ['classId', 'subjectTeacherId', 'teacherIds'],
+        });
+        if (!entity) continue;
+        const teachers = entity.teacherIds?.length
+          ? entity.teacherIds
+          : entity.subjectTeacherId
+            ? [entity.subjectTeacherId]
+            : [];
+        if (teachers.includes(userId)) classIds.add(cs.classId);
+      }
+    }
+
+    return Array.from(classIds);
+  };
+
+  /**
    * Render single student ID card.
    */
   renderStudentCard = async (
     schoolId: string,
     input: RenderStudentIdCardInput,
+    callerCtx?: IdCardsUserContext,
   ): Promise<IdCardRenderResult> => {
+    // Scope: class/subject teachers may only view students from their assigned classes
+    if (callerCtx) {
+      const allowedClassIds = await this.getTeacherClassIds(
+        callerCtx.userId,
+        schoolId,
+        callerCtx.role,
+      );
+      if (allowedClassIds !== null) {
+        const student = await this.studentRepo.findOne({
+          where: { id: input.studentId, schoolId },
+          select: ['id', 'currentClassId'],
+        });
+        if (!student || !allowedClassIds.includes(student.currentClassId)) {
+          throw new ForbiddenException(
+            'You do not have access to this student',
+          );
+        }
+      }
+    }
     const student = await this.studentRepo.findOne({
       where: { id: input.studentId, schoolId },
       relations: ['currentClass'],
@@ -890,15 +977,62 @@ export class IdCardsService implements OnModuleInit {
   renderBatchStudentCards = async (
     schoolId: string,
     input: RenderBatchStudentIdCardsInput,
+    callerCtx?: IdCardsUserContext,
   ): Promise<IdCardRenderResult> => {
     const isPaginated = input.page !== undefined || input.limit !== undefined;
     const page = input.page ?? 1;
     const pageSize = Math.min(100, input.limit ?? 50);
+
+    // Scope: class/subject teachers may only view students from their assigned classes
+    let allowedClassIds: string[] | null = null;
+    if (callerCtx) {
+      allowedClassIds = await this.getTeacherClassIds(
+        callerCtx.userId,
+        schoolId,
+        callerCtx.role,
+      );
+    }
+
+    // If the caller is a teacher, restrict classId to their assigned classes.
+    // If they provide a classId that is not in their list, reject it.
+    const effectiveClassId = input.classId;
+    if (allowedClassIds !== null) {
+      if (effectiveClassId && !allowedClassIds.includes(effectiveClassId)) {
+        throw new ForbiddenException('You do not have access to this class');
+      }
+      // If no class specified, default to returning all their assigned classes
+      if (!effectiveClassId && !input.studentIds?.length) {
+        if (allowedClassIds.length === 0) {
+          throw new ForbiddenException('You have no assigned classes');
+        }
+        // Return students from all assigned classes
+        const where = { currentClassId: In(allowedClassIds), schoolId };
+        const [students, matchingStudentCount] =
+          await this.studentRepo.findAndCount({
+            where,
+            relations: ['currentClass'],
+            order: { lastName: 'ASC', firstName: 'ASC', id: 'ASC' },
+            ...(isPaginated
+              ? { skip: (page - 1) * pageSize, take: pageSize }
+              : { take: 200 }),
+          });
+        return this._compileStudentBatchResult(
+          students,
+          matchingStudentCount,
+          schoolId,
+          input,
+          page,
+          pageSize,
+          isPaginated,
+        );
+      }
+    }
+
     const where =
       input.studentIds && input.studentIds.length > 0
         ? { id: In(input.studentIds), schoolId }
-        : input.classId
-          ? { currentClassId: input.classId, schoolId }
+        : effectiveClassId
+          ? { currentClassId: effectiveClassId, schoolId }
           : { schoolId };
     const [students, matchingStudentCount] =
       await this.studentRepo.findAndCount({
@@ -912,6 +1046,29 @@ export class IdCardsService implements OnModuleInit {
             : {}),
       });
 
+    return this._compileStudentBatchResult(
+      students,
+      matchingStudentCount,
+      schoolId,
+      input,
+      page,
+      pageSize,
+      isPaginated,
+    );
+  };
+
+  /**
+   * Shared helper: compile student batch render result from fetched students.
+   */
+  private _compileStudentBatchResult = async (
+    students: Student[],
+    matchingStudentCount: number,
+    schoolId: string,
+    input: RenderBatchStudentIdCardsInput,
+    page: number,
+    pageSize: number,
+    isPaginated: boolean,
+  ): Promise<IdCardRenderResult> => {
     if (students.length === 0) {
       throw new BadRequestException(
         'No student records found to generate cards',
@@ -1140,13 +1297,18 @@ export class IdCardsService implements OnModuleInit {
   generateStudentCardPdf = async (
     schoolId: string,
     input: GenerateStudentIdCardPdfInput,
+    callerCtx?: IdCardsUserContext,
   ): Promise<IdCardPdfResult> => {
-    const rendered = await this.renderStudentCard(schoolId, {
-      studentId: input.studentId,
-      templateId: input.templateId,
-      templateKey: input.templateKey,
-      side: input.side || IdCardSide.BOTH,
-    });
+    const rendered = await this.renderStudentCard(
+      schoolId,
+      {
+        studentId: input.studentId,
+        templateId: input.templateId,
+        templateKey: input.templateKey,
+        side: input.side || IdCardSide.BOTH,
+      },
+      callerCtx,
+    );
     const pdfBuffer = await this.pdfService.generatePdfFromHtml(rendered.html);
     const filename = `student_id_${input.studentId}_${Date.now()}`;
     return this.processPdfBufferResult(pdfBuffer, filename, schoolId, 1);
@@ -1176,14 +1338,19 @@ export class IdCardsService implements OnModuleInit {
   generateBatchStudentCardsPdf = async (
     schoolId: string,
     input: GenerateBatchStudentIdCardsPdfInput,
+    callerCtx?: IdCardsUserContext,
   ): Promise<IdCardPdfResult> => {
-    const rendered = await this.renderBatchStudentCards(schoolId, {
-      studentIds: input.studentIds,
-      classId: input.classId,
-      templateId: input.templateId,
-      templateKey: input.templateKey,
-      side: input.side || IdCardSide.BOTH,
-    });
+    const rendered = await this.renderBatchStudentCards(
+      schoolId,
+      {
+        studentIds: input.studentIds,
+        classId: input.classId,
+        templateId: input.templateId,
+        templateKey: input.templateKey,
+        side: input.side || IdCardSide.BOTH,
+      },
+      callerCtx,
+    );
     const pdfBuffer = await this.pdfService.generatePdfFromHtml(rendered.html);
     const filename = `batch_students_${Date.now()}`;
     return this.processPdfBufferResult(

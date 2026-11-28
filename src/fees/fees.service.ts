@@ -744,7 +744,10 @@ export class FeesService {
     if (role === UserRole.PARENT)
       throw new ForbiddenException('Use linked-child endpoints');
     if (role === UserRole.CLASS_TEACHER)
-      qb.andWhere('c.classTeacherId = :userId', { userId });
+      qb.andWhere(
+        '(c.classTeacherId = :userId OR :userId = ANY(c."classTeacherIds"))',
+        { userId },
+      );
     if (role === UserRole.SUBJECT_TEACHER)
       qb.andWhere(
         'EXISTS (SELECT 1 FROM class_subjects a WHERE a."schoolId" = c."schoolId" AND a."classId" = c.id AND (a."subjectTeacherId" = :userId OR :userId = ANY(a."teacherIds")))',
@@ -866,9 +869,29 @@ export class FeesService {
     schoolId: string,
     filter?: InvoiceFilterInput,
     pagination?: PaginationArgs,
+    userId?: string,
+    role?: UserRole,
   ) {
     const page = pagination?.page || 1;
     const limit = pagination?.limit || 50;
+
+    // Restrict teachers to only see invoices for their assigned classes
+    let allowedClassIds: string[] | null = null;
+    if (
+      userId &&
+      role &&
+      (role === UserRole.CLASS_TEACHER || role === UserRole.SUBJECT_TEACHER)
+    ) {
+      const teacherClasses = await this.getFeeClassLookup(
+        schoolId,
+        userId,
+        role,
+      );
+      allowedClassIds = teacherClasses.map((c) => c.id);
+      if (allowedClassIds.length === 0) {
+        return { items: [], total: 0, page, totalPages: 0 };
+      }
+    }
 
     const qb = this.invoiceRepo
       .createQueryBuilder('invoice')
@@ -878,6 +901,12 @@ export class FeesService {
       .leftJoinAndSelect('invoice.term', 'term')
       .leftJoinAndSelect('invoice.items', 'items')
       .where('invoice.schoolId = :schoolId', { schoolId });
+
+    if (allowedClassIds !== null) {
+      qb.andWhere('student.currentClassId IN (:...allowedClassIds)', {
+        allowedClassIds,
+      });
+    }
 
     if (filter?.sessionId) {
       qb.andWhere('invoice.sessionId = :sessionId', {
@@ -943,7 +972,7 @@ export class FeesService {
       }
     }
 
-    const classEntities = classId
+    let classEntities = classId
       ? await this.studentRepo.manager.find(ClassEntity, {
           where: { id: classId, schoolId },
           order: { name: 'ASC' },
@@ -952,6 +981,20 @@ export class FeesService {
           where: { schoolId },
           order: { name: 'ASC' },
         });
+
+    if (
+      userId &&
+      role &&
+      (role === UserRole.CLASS_TEACHER || role === UserRole.SUBJECT_TEACHER)
+    ) {
+      const teacherClasses = await this.getFeeClassLookup(
+        schoolId,
+        userId,
+        role,
+      );
+      const allowedIds = new Set(teacherClasses.map((c) => c.id));
+      classEntities = classEntities.filter((c) => allowedIds.has(c.id));
+    }
 
     const classSummaries: ClassFeeSummary[] = [];
     let totalBilled = 0;
@@ -1069,6 +1112,7 @@ export class FeesService {
     search?: string,
     statusFilter?: InvoiceStatus,
     sortBy?: string,
+    userId?: string,
   ): Promise<ClassFeeLedger> {
     if (role && role !== UserRole.PARENT) {
       const isFinanceOwner =
@@ -1083,6 +1127,21 @@ export class FeesService {
           throw new ForbiddenException(
             'Your role does not have permission to view payment records',
           );
+        }
+        // Verify teacher is actually assigned to this class
+        if (
+          userId &&
+          (role === UserRole.CLASS_TEACHER || role === UserRole.SUBJECT_TEACHER)
+        ) {
+          const teacherClasses = await this.getFeeClassLookup(
+            schoolId,
+            userId,
+            role,
+          );
+          const hasAccess = teacherClasses.some((c) => c.id === classId);
+          if (!hasAccess) {
+            throw new ForbiddenException('You are not assigned to this class');
+          }
         }
       }
     }
@@ -1608,9 +1667,28 @@ export class FeesService {
         order: { createdAt: 'ASC' },
       })
       .then(async (shares) => {
+        let scopedShares = shares;
+        const roleEnum = userRole as UserRole;
+        if (
+          roleEnum === UserRole.CLASS_TEACHER ||
+          roleEnum === UserRole.SUBJECT_TEACHER
+        ) {
+          const teacherClasses = await this.getFeeClassLookup(
+            schoolId,
+            userId,
+            roleEnum,
+          );
+          const allowedIds = new Set(teacherClasses.map((c) => c.id));
+          scopedShares = shares.filter(
+            (s) =>
+              s.student?.currentClassId &&
+              allowedIds.has(s.student.currentClassId),
+          );
+        }
+
         const eligible: PaymentSubmissionStudentShare[] = [];
 
-        for (const share of shares) {
+        for (const share of scopedShares) {
           const config = await this.resolveApprovalConfig(schoolId);
           if (!config) {
             // No config — any admin/bursar can approve
@@ -1656,10 +1734,12 @@ export class FeesService {
   }
 
   /** Get all payment shares for the school, optionally filtered by status and search */
-  getSchoolPaymentShares(
+  async getSchoolPaymentShares(
     schoolId: string,
     status?: PaymentShareStatus,
     search?: string,
+    userId?: string,
+    role?: UserRole,
   ) {
     const qb = this.shareRepo
       .createQueryBuilder('share')
@@ -1672,6 +1752,23 @@ export class FeesService {
       .leftJoinAndSelect('allocations.invoiceItem', 'invoiceItem')
       .leftJoinAndSelect('share.finalizedByUser', 'finalizedByUser')
       .where('batch.schoolId = :schoolId', { schoolId });
+
+    if (
+      userId &&
+      role &&
+      (role === UserRole.CLASS_TEACHER || role === UserRole.SUBJECT_TEACHER)
+    ) {
+      const teacherClasses = await this.getFeeClassLookup(
+        schoolId,
+        userId,
+        role,
+      );
+      const allowedIds = teacherClasses.map((c) => c.id);
+      if (allowedIds.length === 0) {
+        return [];
+      }
+      qb.andWhere('student.currentClassId IN (:...allowedIds)', { allowedIds });
+    }
 
     if (status) {
       qb.andWhere('share.status = :status', { status });
@@ -2634,11 +2731,26 @@ export class FeesService {
 
     return this.visibilityRepo
       .findOne({ where: { schoolId, role: userRole } })
-      .then((cfg) => {
+      .then(async (cfg) => {
         if (!cfg || !cfg.canViewPaymentRecords) {
           throw new ForbiddenException(
             'Your role does not have permission to view payment records',
           );
+        }
+        // Verify teacher is assigned to this class
+        if (
+          userRole === UserRole.CLASS_TEACHER ||
+          userRole === UserRole.SUBJECT_TEACHER
+        ) {
+          const teacherClasses = await this.getFeeClassLookup(
+            schoolId,
+            userId,
+            userRole,
+          );
+          const hasAccess = teacherClasses.some((c) => c.id === classId);
+          if (!hasAccess) {
+            throw new ForbiddenException('You are not assigned to this class');
+          }
         }
         return this.getClassInvoices(classId, schoolId, sessionId, termId);
       });

@@ -13,6 +13,7 @@ import { User } from '../users/entities/user.entity';
 import { Student } from '../students/entities/student.entity';
 import { School } from '../schools/entities/school.entity';
 import { ClassEntity } from '../classes/entities/class.entity';
+import { ClassSubject } from '../classes/entities/class-subject.entity';
 import { SchoolsService } from '../schools/schools.service';
 import { PdfService } from '../pdf/pdf.service';
 import { UploadService } from '../upload/upload.service';
@@ -265,6 +266,10 @@ describe('IdCardsService', () => {
         {
           provide: getRepositoryToken(ClassEntity),
           useValue: mockClassRepo,
+        },
+        {
+          provide: getRepositoryToken(ClassSubject),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
         },
         {
           provide: SchoolsService,
