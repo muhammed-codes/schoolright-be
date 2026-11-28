@@ -292,22 +292,23 @@ export const generateCustomReportCardHtml = (
                         if (col.type === 'subject') {
                           content = `<span class="subject-name">${esc(subject.name)}</span>`;
                         } else if (col.type === 'component') {
-                          const targetKey = (
-                            col.componentKey ||
-                            col.label ||
-                            ''
-                          )
-                            .toLowerCase()
-                            .trim();
+                          const normalizeKey = (s: string) =>
+                            s
+                              .toLowerCase()
+                              .replace(/[\s_-]+/g, '')
+                              .trim();
+                          const targetKey = normalizeKey(
+                            col.componentKey || col.label || '',
+                          );
                           const matched = (subject.componentScores || []).find(
                             (cs) => {
-                              const cKey = (cs.component || '')
-                                .toLowerCase()
-                                .trim();
+                              const cKey = normalizeKey(cs.component || '');
                               return (
                                 cKey === targetKey ||
-                                cKey.includes(targetKey) ||
-                                targetKey.includes(cKey)
+                                (cKey.length > 0 &&
+                                  targetKey.length > 0 &&
+                                  (cKey.includes(targetKey) ||
+                                    targetKey.includes(cKey)))
                               );
                             },
                           );

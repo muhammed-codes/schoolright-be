@@ -364,12 +364,20 @@ export class PdfService {
                   maxScore: cs.score > 40 ? 60 : 20,
                 }));
               }
+              const normalizeComponentKey = (value: string) =>
+                String(value)
+                  .toLowerCase()
+                  .replace(/[\s_-]+/g, '')
+                  .trim();
               const componentScores = configuredComponents.map(
                 (componentDef) => {
+                  const targetKey = normalizeComponentKey(
+                    componentDef.component,
+                  );
                   const matchingScore = (score.scores || []).find(
                     (componentScore) =>
-                      String(componentScore.component).trim().toLowerCase() ===
-                      String(componentDef.component).trim().toLowerCase(),
+                      normalizeComponentKey(componentScore.component) ===
+                      targetKey,
                   );
                   if (!matchingScore) {
                     return { ...componentDef, score: null };
