@@ -12,9 +12,11 @@ import { Student } from '../students/entities/student.entity';
 import { AttendanceService } from './attendance.service';
 import { AttendanceResolver } from './attendance.resolver';
 import { UploadModule } from '../upload/upload.module';
+import { AutomationModule } from '../automation/automation.module';
 
 @Module({
   imports: [
+    AutomationModule,
     TypeOrmModule.forFeature([
       StudentAttendance,
       StaffAttendance,

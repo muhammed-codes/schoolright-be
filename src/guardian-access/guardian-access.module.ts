@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AutomationModule } from '../automation/automation.module';
 import { Student } from '../students/entities/student.entity';
 import { StudentParent } from '../students/entities/student-parent.entity';
 import { Session } from '../terms/entities/session.entity';
@@ -27,6 +28,7 @@ import { GuardianPolicyRuleService } from './services/guardian-policy-rule.servi
 @Global()
 @Module({
   imports: [
+    AutomationModule,
     TermsModule,
     TypeOrmModule.forFeature([
       GuardianAccessAuditLog,

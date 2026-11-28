@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AutomationModule } from '../automation/automation.module';
 
 import { FeesService } from './fees.service';
 import { FeesResolver } from './fees.resolver';
@@ -29,6 +30,7 @@ import { PdfModule } from '../pdf/pdf.module';
 
 @Module({
   imports: [
+    AutomationModule,
     PdfModule,
     TypeOrmModule.forFeature([
       FeeCategory,

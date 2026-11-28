@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AutomationModule } from '../../automation/automation.module';
 import { ClassEntity } from '../../classes/entities/class.entity';
 import { Student } from '../../students/entities/student.entity';
 import { StudentParent } from '../../students/entities/student-parent.entity';
@@ -9,11 +10,13 @@ import { GuardianGroup } from './entities/guardian-group.entity';
 import { GuardianGroupGuardian } from './entities/guardian-group-guardian.entity';
 import { GuardianGroupStudent } from './entities/guardian-group-student.entity';
 import { GuardianGroupResolver } from './guardian-groups.resolver';
+import { GuardianGroupAutomationService } from './services/guardian-group-automation.service';
 import { GuardianGroupMembershipService } from './services/guardian-group-membership.service';
 import { GuardianGroupService } from './services/guardian-group.service';
 
 @Module({
   imports: [
+    AutomationModule,
     GuardianAccessModule,
     TypeOrmModule.forFeature([
       ClassEntity,
@@ -27,6 +30,7 @@ import { GuardianGroupService } from './services/guardian-group.service';
   ],
   providers: [
     GuardianGroupResolver,
+    GuardianGroupAutomationService,
     GuardianGroupMembershipService,
     GuardianGroupService,
   ],

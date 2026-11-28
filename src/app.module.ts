@@ -29,6 +29,7 @@ import { MarketingModule } from './marketing/marketing.module';
 import { GuardianAccessModule } from './guardian-access/guardian-access.module';
 import { GuardianGroupsModule } from './guardian-access/guardian-groups/guardian-groups.module';
 import { GuardianDashboardModule } from './guardian-dashboard/guardian-dashboard.module';
+import { AutomationModule } from './automation/automation.module';
 import { validateEnvironment } from './config/environment.validation';
 
 const isProduction =
@@ -125,6 +126,7 @@ const isProduction =
       context: ({ req }: { req: Request }) => ({ req }),
     }),
 
+    AutomationModule,
     AuthModule,
     UsersModule,
     SchoolsModule,
