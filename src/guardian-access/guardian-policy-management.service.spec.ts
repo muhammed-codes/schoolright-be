@@ -166,7 +166,7 @@ describe('guardian policy management', () => {
         rules: [],
         createdAt: new Date(),
         updatedAt: new Date(),
-      },
+      } as unknown as GuardianAccessPolicy,
     ]);
     await expect(
       service.create(

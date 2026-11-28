@@ -6,7 +6,10 @@ import {
   PaymentSubmissionStudentShare,
 } from '../fees/entities/payment-submission-student-share.entity';
 import { GuardianResource } from '../guardian-access/enums/guardian-permission.enums';
-import { AnnouncementAudience } from '../communication/entities/announcement.entity';
+import {
+  Announcement,
+  AnnouncementAudience,
+} from '../communication/entities/announcement.entity';
 import { GuardianDashboardAttentionType } from './dto/guardian-dashboard.dto';
 import { GuardianDashboardResolver } from './guardian-dashboard.resolver';
 import {
@@ -100,7 +103,7 @@ const announcement = (id: string, publishedAt: Date) =>
     publishedAt,
     audience: AnnouncementAudience.SCHOOL,
     status: 'published',
-  }) as never;
+  }) as unknown as Announcement;
 
 const pendingShare = (id: string, createdAt: Date) =>
   ({
@@ -212,7 +215,7 @@ describe('guardian dashboard service', () => {
 
     await expect(
       deps.service.getDashboard(
-        { ...USER, role: UserRole.TEACHER },
+        { ...USER, role: UserRole.CLASS_TEACHER },
         'student-a',
         undefined,
         NOW,

@@ -55,7 +55,7 @@ describe('mandatory record scope', () => {
   it('allows subject assignments', async () => {
     await expect(
       make(
-        new Map([
+        new Map<unknown, unknown>([
           [ClassEntity, {}],
           [ClassSubject, { id: 'assignment' }],
         ]),
@@ -73,7 +73,7 @@ describe('mandatory record scope', () => {
   it('allows linked children', async () => {
     await expect(
       make(
-        new Map([
+        new Map<unknown, unknown>([
           [Student, {}],
           [StudentParent, {}],
         ]),

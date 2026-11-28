@@ -65,7 +65,7 @@ describe('guardian enforcement service', () => {
       firstName: 'Test',
       lastName: 'Student',
       currentClassId: null,
-    }) as Student;
+    }) as unknown as Student;
 
   it('builds a default-deny snapshot only for in-school linked students', async () => {
     const { service } = buildService([
