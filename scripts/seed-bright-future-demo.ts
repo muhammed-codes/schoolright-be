@@ -124,7 +124,8 @@ const hash = (value: string) => {
 const clamp = (n: number, min: number, max: number) =>
   Math.max(min, Math.min(max, n));
 const dateISO = (value: string) => `${value}T00:00:00.000Z`;
-const nairaToKobo = (naira: number) => Math.round(naira * 100);
+const toNaira = (naira: number) => Math.round(naira);
+const nairaToKobo = toNaira;
 const weekdays = (startISO: string, endISO: string) => {
   const dates: string[] = [];
   const current = new Date(startISO);
@@ -972,7 +973,7 @@ export async function bootstrap() {
       if (!invoice) continue;
       const total = Number(invoice.totalAmount || 0);
       const ratio = bucket <= 2 ? 1 : 0.5 + (i % 3) * 0.1;
-      const amount = nairaToKobo(Math.round((total / 100) * ratio));
+      const amount = Math.round(total * ratio);
       const note = `BFIS demo offline payment - ${student.id}`;
       const alreadyPaid = await shareRepo
         .createQueryBuilder('share')
