@@ -505,6 +505,15 @@ input CreateGuardianExceptionInput {
   studentId: String!
 }
 
+input CreateGuardianGroupInput {
+  condition: JSONObject
+  description: String
+  isActive: Boolean
+  name: String!
+  studentIds: [String!]
+  type: GuardianGroupType!
+}
+
 input CreateGuardianPolicyInput {
   condition: JSONObject
   description: String
@@ -1382,6 +1391,13 @@ enum GuardianAuditAction {
   EXCEPTION_CREATED
   EXCEPTION_REMOVED
   EXCEPTION_UPDATED
+  GROUP_ACTIVATED
+  GROUP_ARCHIVED
+  GROUP_CREATED
+  GROUP_DELETED
+  GROUP_EVALUATED
+  GROUP_MEMBERS_UPDATED
+  GROUP_UPDATED
   POLICY_CREATED
   POLICY_DELETED
   POLICY_DISABLED
@@ -1573,6 +1589,102 @@ enum GuardianEffect {
   DENY
 }
 
+type GuardianGroup {
+  condition: JSONObject
+  createdAt: DateTime!
+  createdById: String!
+  description: String
+  id: ID!
+  isActive: Boolean!
+  isDeleted: Boolean!
+  name: String!
+  schoolId: String!
+  type: GuardianGroupType!
+  updatedAt: DateTime!
+  updatedById: String!
+}
+
+type GuardianGroupConditionDetailType {
+  fee: JSONObject
+  field: GuardianConditionField
+  matched: Boolean!
+  operator: GuardianConditionOperator
+  reason: String
+  value: JSONObject
+}
+
+type GuardianGroupConditionEvaluationType {
+  details: [GuardianGroupConditionDetailType!]!
+  matched: Boolean!
+  unavailableReasons: [String!]!
+}
+
+input GuardianGroupDraftInput {
+  condition: JSONObject
+  description: String
+  isActive: Boolean
+  name: String!
+  studentIds: [String!]
+  type: GuardianGroupType!
+}
+
+type GuardianGroupGuardianPreviewType {
+  email: String
+  evaluatedAt: DateTime
+  guardianId: String!
+  guardianName: String!
+  qualifyingStudentIds: [String!]!
+  reason: String
+  state: GuardianGroupMembershipState!
+}
+
+input GuardianGroupMembersInput {
+  groupId: String!
+  studentIds: [String!]!
+}
+
+enum GuardianGroupMembershipSource {
+  DYNAMIC
+  FIXED
+}
+
+enum GuardianGroupMembershipState {
+  ACTIVE
+  INACTIVE
+  UNEVALUABLE
+}
+
+type GuardianGroupPreviewType {
+  breakdown: JSONObject!
+  exclusions: [GuardianGroupStudentPreviewType!]!
+  generatedAt: DateTime!
+  guardians: [GuardianGroupGuardianPreviewType!]!
+  matchedStudentCount: Int!
+  source: GuardianGroupMembershipSource!
+  studentCount: Int!
+  students: [GuardianGroupStudentPreviewType!]!
+  unevaluableStudentCount: Int!
+  uniqueGuardianCount: Int!
+}
+
+type GuardianGroupStudentPreviewType {
+  classId: String
+  className: String
+  conditionEvaluation: GuardianGroupConditionEvaluationType
+  evaluatedAt: DateTime
+  metrics: JSONObject
+  reason: String
+  state: GuardianGroupMembershipState!
+  studentId: String!
+  studentName: String!
+  studentStatus: String!
+}
+
+enum GuardianGroupType {
+  DYNAMIC
+  FIXED
+}
+
 input GuardianInput {
   address: String
   email: String
@@ -1760,6 +1872,7 @@ type Mutation {
   activateSchool(id: String!): School!
   activateTerm(termId: String!): Term!
   activateUser(id: String!): User!
+  addGuardianGroupMembers(input: GuardianGroupMembersInput!): GuardianGroupPreviewType!
   adminResetPassword(newPassword: String!, userId: String!): Boolean!
   adminResetSchoolPassword(newPassword: String!, schoolId: String!): Boolean!
   adminSetTeacherAvailability(input: AdminSetTeacherAvailabilityInput!): TeacherAvailability!
@@ -1800,6 +1913,7 @@ type Mutation {
   createGuardianAccessException(input: CreateGuardianExceptionInput!, schoolId: String): GuardianAccessException!
   createGuardianAccessPolicy(input: CreateGuardianPolicyInput!, schoolId: String): GuardianAccessPolicy!
   createGuardianAccessPolicyRule(action: GuardianAction!, effect: GuardianEffect!, policyId: String!, resource: GuardianResource!): GuardianAccessPolicyRule!
+  createGuardianGroup(input: CreateGuardianGroupInput!, schoolId: String): GuardianGroup!
 
   """Create a custom ID card template for the school"""
   createIdCardTemplate(input: CreateIdCardTemplateInput!): IdCardTemplate!
@@ -1826,6 +1940,7 @@ type Mutation {
   deleteGuardianAccessException(id: String!): Boolean!
   deleteGuardianAccessPolicy(id: String!): Boolean!
   deleteGuardianAccessPolicyRule(id: String!): Boolean!
+  deleteGuardianGroup(id: String!): Boolean!
 
   """Delete a custom ID card template"""
   deleteIdCardTemplate(id: String!): Boolean!
@@ -1842,6 +1957,7 @@ type Mutation {
   duplicateIdCardTemplate(id: String!): IdCardTemplate!
   duplicateReceiptTemplate(id: String!): ReceiptTemplate!
   duplicateResultTemplate(id: String!): ResultTemplate!
+  evaluateGuardianGroup(id: String!): GuardianGroupPreviewType!
   forgotPassword(input: ForgotPasswordInput!): Boolean!
   fundExpenseRequest(id: ID!): ExpenseRequest!
 
@@ -1885,6 +2001,7 @@ type Mutation {
   rejectPaymentShare(input: RejectShareInput!): PaymentSubmissionStudentShare!
   removeClassSubjectAssignment(id: String!): Boolean!
   removeFeeOverride(id: String!): Boolean!
+  removeGuardianGroupMembers(input: GuardianGroupMembersInput!): GuardianGroupPreviewType!
   removePermissionGroup(groupId: String!, schoolId: String, userId: String!): Boolean!
   removeUserPermission(action: PermissionAction!, resource: AppResource!, schoolId: String, userId: String!): Boolean!
   reorderPeriods(items: [ReorderPeriodItem!]!): [Period!]!
@@ -1901,6 +2018,7 @@ type Mutation {
   setDefaultReceiptTemplate(id: String!): ReceiptTemplate
   setExpenseBudget(input: SetExpenseBudgetInput!): ExpenseBudget!
   setGuardianAccessPolicyEnabled(enabled: Boolean!, id: String!): GuardianAccessPolicy!
+  setGuardianGroupActive(active: Boolean!, id: String!): GuardianGroup!
   setPermissionGroupPermissions(input: SetPermissionGroupPermissionsInput!, schoolId: String): [PermissionGroupPermission!]!
   setUserPermission(action: PermissionAction, effect: PermissionEffect, input: SetUserPermissionInput, resource: AppResource, schoolId: String, userId: String): UserPermission!
   singleUpload(file: Upload!, folder: String!): UploadResult!
@@ -1924,6 +2042,7 @@ type Mutation {
   updateGuardianAccessException(input: UpdateGuardianExceptionInput!): GuardianAccessException!
   updateGuardianAccessPolicy(input: UpdateGuardianPolicyInput!): GuardianAccessPolicy!
   updateGuardianAccessPolicyRule(input: UpdateGuardianPolicyRuleInput!): GuardianAccessPolicyRule!
+  updateGuardianGroup(input: UpdateGuardianGroupInput!): GuardianGroup!
 
   """Update a custom ID card template for the school"""
   updateIdCardTemplate(id: String!, input: UpdateIdCardTemplateInput!): IdCardTemplate!
@@ -2044,6 +2163,14 @@ type PaginatedExpenses {
   page: Int!
   total: Int!
   totalAmount: Float!
+  totalPages: Int!
+}
+
+type PaginatedGuardianGroup {
+  hasMore: Boolean
+  items: [GuardianGroup!]!
+  page: Int!
+  total: Int!
   totalPages: Int!
 }
 
@@ -2387,6 +2514,10 @@ type Query {
   guardianAccessPolicies(schoolId: String): [GuardianAccessPolicy!]!
   guardianAccessPolicy(id: String!): GuardianAccessPolicy!
   guardianDashboard(studentId: String!, termId: String): GuardianDashboard!
+  guardianGroup(id: String!): GuardianGroup!
+  guardianGroupHistory(id: String!): [GuardianAccessAuditLog!]!
+  guardianGroupMembers(id: String!): GuardianGroupPreviewType!
+  guardianGroups(isActive: Boolean, limit: Int! = 50, page: Int! = 1, schoolId: String, search: String, type: GuardianGroupType): PaginatedGuardianGroup!
   guardianStudents(guardianId: String!): [Student!]!
 
   """Get an ID card template by ID or key"""
@@ -2425,6 +2556,7 @@ type Query {
   pettyCashTransactions(limit: Int = 50): [PettyCashTransaction!]!
   platformStats: PlatformStats!
   previewGuardianAccess(action: GuardianAction!, condition: JSONObject, guardianId: String!, resource: GuardianResource!, rules: [GuardianPolicyRuleInput!], schoolId: String, studentId: String!): GuardianPreviewType!
+  previewGuardianGroup(input: GuardianGroupDraftInput!, schoolId: String): GuardianGroupPreviewType!
 
   """Preview an ID card template design with sample data"""
   previewIdCardHtml(input: PreviewIdCardInput!): IdCardRenderResult!
@@ -3469,6 +3601,17 @@ input UpdateGuardianExceptionInput {
   expiresAt: DateTime
   id: String!
   reason: String
+}
+
+input UpdateGuardianGroupInput {
+  clearCondition: Boolean
+  condition: JSONObject
+  description: String
+  id: String!
+  isActive: Boolean
+  name: String
+  studentIds: [String!]
+  type: GuardianGroupType
 }
 
 input UpdateGuardianPolicyInput {
