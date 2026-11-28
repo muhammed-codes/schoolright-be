@@ -309,6 +309,7 @@ export class FeesService {
         item.amount = newAmount;
         item.overrideId = override?.id ?? null;
         item.overrideType = override?.type ?? null;
+        item.overrideApprovalStatus = override?.approvalStatus ?? null;
         item.overrideAmount = override
           ? Math.max(0, struct.amount - override.overrideAmount)
           : 0;
@@ -617,6 +618,7 @@ export class FeesService {
               originalAmount: struct.amount,
               overrideId: override?.id ?? null,
               overrideType: override?.type ?? null,
+              overrideApprovalStatus: override?.approvalStatus ?? null,
               overrideAmount: override
                 ? Math.max(0, struct.amount - override.overrideAmount)
                 : 0,
@@ -2266,7 +2268,10 @@ export class FeesService {
     return fallback;
   }
 
-  async previewReceiptTemplateHtml(config: any, schoolId: string): Promise<string> {
+  async previewReceiptTemplateHtml(
+    config: any,
+    schoolId: string,
+  ): Promise<string> {
     const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
     const resolvedConfig: ReceiptTemplateConfig =
       config || getDefaultReceiptTemplateConfig(school?.name);
@@ -2281,7 +2286,9 @@ export class FeesService {
             resolvedConfig.branding?.primaryColor,
           ),
         stampUrl: school?.stampUrl || null,
-        address: school?.address || 'Plot 123 Education Boulevard, Victoria Island, Lagos',
+        address:
+          school?.address ||
+          'Plot 123 Education Boulevard, Victoria Island, Lagos',
         phone: school?.phone || '+234 800 000 0000',
         email: school?.email || 'accounts@school.edu',
       },
@@ -2310,10 +2317,30 @@ export class FeesService {
         outstandingBalance: 50000,
       },
       items: [
-        { description: 'First Term Tuition Fee', amount: 120000, amountPaid: 100000, balance: 20000 },
-        { description: 'Science Laboratory & Practical Fee', amount: 20000, amountPaid: 20000, balance: 0 },
-        { description: 'School Sports & Development Levy', amount: 10000, amountPaid: 10000, balance: 0 },
-        { description: 'ICT Resource & Library Access', amount: 50000, amountPaid: 20000, balance: 30000 },
+        {
+          description: 'First Term Tuition Fee',
+          amount: 120000,
+          amountPaid: 100000,
+          balance: 20000,
+        },
+        {
+          description: 'Science Laboratory & Practical Fee',
+          amount: 20000,
+          amountPaid: 20000,
+          balance: 0,
+        },
+        {
+          description: 'School Sports & Development Levy',
+          amount: 10000,
+          amountPaid: 10000,
+          balance: 0,
+        },
+        {
+          description: 'ICT Resource & Library Access',
+          amount: 50000,
+          amountPaid: 20000,
+          balance: 30000,
+        },
       ],
     };
 
@@ -2354,8 +2381,14 @@ export class FeesService {
     const invoices = await this.invoiceRepo.find({
       where: { studentId: share.studentId, schoolId },
     });
-    const totalDue = invoices.reduce((acc, inv) => acc + (inv.totalAmount || 0), 0);
-    const totalPaidAcrossInvoices = invoices.reduce((acc, inv) => acc + (inv.totalPaid || 0), 0);
+    const totalDue = invoices.reduce(
+      (acc, inv) => acc + (inv.totalAmount || 0),
+      0,
+    );
+    const totalPaidAcrossInvoices = invoices.reduce(
+      (acc, inv) => acc + (inv.totalPaid || 0),
+      0,
+    );
     const outstandingBalance = Math.max(0, totalDue - totalPaidAcrossInvoices);
 
     const items: ReceiptItemData[] = (share.allocations || []).map((alloc) => ({
@@ -2396,13 +2429,17 @@ export class FeesService {
           }
         : null,
       payment: {
-        serialNumber: receipt?.serialNumber || `REC-${share.id.slice(0, 8).toUpperCase()}`,
-        generatedAt: receipt?.generatedAt || share.batch?.createdAt || new Date(),
+        serialNumber:
+          receipt?.serialNumber || `REC-${share.id.slice(0, 8).toUpperCase()}`,
+        generatedAt:
+          receipt?.generatedAt || share.batch?.createdAt || new Date(),
         amount: share.amount,
         paymentMethod: share.batch?.bankAccount
           ? `Bank Transfer (${share.batch.bankAccount.bankName})`
           : 'Bank Transfer',
-        reference: share.batch?.id ? `REF-${share.batch.id.slice(0, 10).toUpperCase()}` : undefined,
+        reference: share.batch?.id
+          ? `REF-${share.batch.id.slice(0, 10).toUpperCase()}`
+          : undefined,
         bankName: share.batch?.bankAccount?.bankName,
         accountNumber: share.batch?.bankAccount?.accountNumber,
       },
@@ -2451,7 +2488,12 @@ export class FeesService {
     role: UserRole,
     schoolId: string,
   ): Promise<string> {
-    const html = await this.generateReceiptHtml(shareId, userId, role, schoolId);
+    const html = await this.generateReceiptHtml(
+      shareId,
+      userId,
+      role,
+      schoolId,
+    );
     const { template } = await this.getReceiptFullData(shareId, schoolId);
     const isThermal = template.config?.layout?.paperSize === 'THERMAL_80MM';
 

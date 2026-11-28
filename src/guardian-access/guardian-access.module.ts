@@ -4,7 +4,9 @@ import { Student } from '../students/entities/student.entity';
 import { StudentParent } from '../students/entities/student-parent.entity';
 import { Session } from '../terms/entities/session.entity';
 import { Term } from '../terms/entities/term.entity';
+import { FeeCategory } from '../fees/entities/fee-category.entity';
 import { StudentInvoice } from '../fees/entities/student-invoice.entity';
+import { TermsModule } from '../terms/terms.module';
 import { User } from '../users/entities/user.entity';
 import { GuardianAccessResolver } from './guardian-access.resolver';
 import { GuardianAccessAuditLog } from './entities/guardian-access-audit-log.entity';
@@ -25,6 +27,7 @@ import { GuardianPolicyRuleService } from './services/guardian-policy-rule.servi
 @Global()
 @Module({
   imports: [
+    TermsModule,
     TypeOrmModule.forFeature([
       GuardianAccessAuditLog,
       GuardianAccessException,
@@ -34,6 +37,7 @@ import { GuardianPolicyRuleService } from './services/guardian-policy-rule.servi
       StudentParent,
       Session,
       Term,
+      FeeCategory,
       StudentInvoice,
       User,
     ]),

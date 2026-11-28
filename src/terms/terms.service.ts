@@ -11,6 +11,11 @@ import { CreateSessionInput } from './dto/create-session.input';
 import { CreateTermInput } from './dto/create-term.input';
 import { TermStatus } from '../common/enums';
 
+export interface ActiveTermResolution {
+  term: Term | null;
+  reason?: string;
+}
+
 @Injectable()
 export class TermsService {
   constructor(
@@ -115,6 +120,35 @@ export class TermsService {
     return this.termsRepository
       .update({ id: termId, schoolId }, { status: TermStatus.CLOSED })
       .then(() => this.findTermById(termId));
+  };
+
+  resolveActiveTermForMetrics = async (
+    schoolId: string,
+  ): Promise<ActiveTermResolution> => {
+    const terms = await this.termsRepository.find({
+      where: { schoolId, status: TermStatus.ACTIVE },
+      relations: ['session'],
+    });
+    if (terms.length === 0) {
+      return {
+        term: null,
+        reason: 'No active term is configured for this school',
+      };
+    }
+    if (terms.length > 1) {
+      return {
+        term: null,
+        reason: 'Multiple active terms are configured for this school',
+      };
+    }
+    const term = terms[0];
+    if (!term.sessionId || !term.session) {
+      return {
+        term: null,
+        reason: 'No active session is configured for this school',
+      };
+    }
+    return { term };
   };
 
   getActiveTerm = (schoolId: string) => {

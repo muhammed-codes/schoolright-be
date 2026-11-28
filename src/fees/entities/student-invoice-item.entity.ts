@@ -1,7 +1,10 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { Entity, Column, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
-import { FeeOverrideType } from './student-fee-override.entity';
+import {
+  FeeOverrideApprovalStatus,
+  FeeOverrideType,
+} from './student-fee-override.entity';
 import { StudentInvoice } from './student-invoice.entity';
 
 @ObjectType()
@@ -40,6 +43,13 @@ export class StudentInvoiceItem extends BaseEntity {
 
   @Column({ type: 'uuid', nullable: true })
   overrideId!: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: FeeOverrideApprovalStatus,
+    nullable: true,
+  })
+  overrideApprovalStatus!: FeeOverrideApprovalStatus | null;
 
   @Field(() => Int)
   @Column({ type: 'int', default: 0 })
