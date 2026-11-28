@@ -3,9 +3,10 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, Not } from 'typeorm';
+import { Repository, Between, Not, EntityManager } from 'typeorm';
 import { StudentAttendance } from './entities/student-attendance.entity';
 import { StaffAttendance } from './entities/staff-attendance.entity';
 import { ClassEntity } from '../classes/entities/class.entity';
@@ -29,6 +30,8 @@ import { AttendanceStatus, UserRole } from '../common/enums';
 import { UploadService } from '../upload/upload.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { AutomationEventType } from '../automation/enums/automation-event.enums';
+import { AutomationOutboxService } from '../automation/services/automation-outbox.service';
 
 @Injectable()
 export class AttendanceService {
@@ -52,7 +55,26 @@ export class AttendanceService {
     private readonly uploadService: UploadService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Optional() private readonly automationOutbox?: AutomationOutboxService,
   ) {}
+
+  private emitAutomationEvent = async (
+    manager: EntityManager,
+    type: AutomationEventType,
+    schoolId: string,
+    aggregateId: string,
+    studentIds: string[],
+  ): Promise<void> => {
+    if (!this.automationOutbox || studentIds.length === 0) return;
+    await this.automationOutbox.enqueue(manager, {
+      type,
+      schoolId,
+      aggregateType: 'StudentAttendance',
+      aggregateId,
+      payload: { studentIds },
+      actorId: null,
+    });
+  };
 
   markStudentAttendance = (
     input: MarkAttendanceInput,
@@ -81,6 +103,9 @@ export class AttendanceService {
         );
       }
 
+      const recordedStudentIds: string[] = [];
+      const correctedStudentIds: string[] = [];
+      const statusChangedStudentIds: string[] = [];
       return Promise.all(
         input.records.map((record) =>
           this.studentAttendanceRepo
@@ -92,26 +117,55 @@ export class AttendanceService {
             })
             .then((existing) => {
               if (existing) {
+                if (existing.status !== record.status) {
+                  statusChangedStudentIds.push(record.studentId);
+                }
                 existing.status = record.status;
                 existing.markedByUserId = markerId;
                 existing.markedAt = new Date();
+                correctedStudentIds.push(record.studentId);
                 return this.studentAttendanceRepo.save(existing);
-              } else {
-                const newRecord = this.studentAttendanceRepo.create({
-                  studentId: record.studentId,
-                  classId: input.classId,
-                  schoolId,
-                  termId: term.id,
-                  date: input.date,
-                  status: record.status,
-                  markedByUserId: markerId,
-                  markedAt: new Date(),
-                });
-                return this.studentAttendanceRepo.save(newRecord);
               }
+              const newRecord = this.studentAttendanceRepo.create({
+                studentId: record.studentId,
+                classId: input.classId,
+                schoolId,
+                termId: term.id,
+                date: input.date,
+                status: record.status,
+                markedByUserId: markerId,
+                markedAt: new Date(),
+              });
+              recordedStudentIds.push(record.studentId);
+              return this.studentAttendanceRepo.save(newRecord);
             }),
         ),
-      ).then(() => this.getClassAttendance(input.classId, input.date));
+      )
+        .then(async () => {
+          const manager = this.studentAttendanceRepo.manager;
+          await this.emitAutomationEvent(
+            manager,
+            AutomationEventType.ATTENDANCE_RECORDED,
+            schoolId,
+            term.id,
+            recordedStudentIds,
+          );
+          await this.emitAutomationEvent(
+            manager,
+            AutomationEventType.ATTENDANCE_CORRECTED,
+            schoolId,
+            term.id,
+            correctedStudentIds,
+          );
+          await this.emitAutomationEvent(
+            manager,
+            AutomationEventType.ATTENDANCE_STATUS_CHANGED,
+            schoolId,
+            term.id,
+            statusChangedStudentIds,
+          );
+        })
+        .then(() => this.getClassAttendance(input.classId, input.date));
     });
   };
 

@@ -281,6 +281,7 @@ describe('guardian enforcement on parent-facing resolvers', () => {
         page: 1,
         totalPages: 0,
       }),
+      getTargetedRecipientAnnouncementIds: jest.fn().mockResolvedValue([]),
     };
     studentsResolver = new StudentsResolver(
       studentsService as never,

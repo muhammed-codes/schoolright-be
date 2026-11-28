@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -69,6 +70,8 @@ import {
 } from './templates/receipt-renderer';
 
 import { ClassEntity } from '../classes/entities/class.entity';
+import { AutomationEventType } from '../automation/enums/automation-event.enums';
+import { AutomationOutboxService } from '../automation/services/automation-outbox.service';
 
 import {
   CreateFeeCategoryInput,
@@ -143,7 +146,28 @@ export class FeesService {
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
     private readonly pdfService: PdfService,
+    @Optional() private readonly automationOutbox?: AutomationOutboxService,
   ) {}
+
+  private emitAutomationEvent = async (
+    manager: EntityManager,
+    type: AutomationEventType,
+    schoolId: string,
+    aggregateType: string,
+    aggregateId: string,
+    payload: Record<string, unknown> = {},
+    actorId: string | null = null,
+  ): Promise<void> => {
+    if (!this.automationOutbox) return;
+    await this.automationOutbox.enqueue(manager, {
+      type,
+      schoolId,
+      aggregateType,
+      aggregateId,
+      actorId,
+      payload,
+    });
+  };
 
   // ─── BE-FM-2: Fee Category & Structure ───────────────────────────────────
 
@@ -397,6 +421,23 @@ export class FeesService {
         }),
       );
 
+      const overrideType = input.type ?? FeeOverrideType.ADJUSTMENT;
+      await this.emitAutomationEvent(
+        manager,
+        overrideType === FeeOverrideType.WAIVER
+          ? AutomationEventType.FEE_WAIVER_CHANGED
+          : AutomationEventType.FEE_DISCOUNT_CHANGED,
+        schoolId,
+        'StudentFeeOverride',
+        input.feeStructureId,
+        {
+          feeStructureId: input.feeStructureId,
+          studentIds: savedOverrides.map((override) => override.studentId),
+          overrideType,
+        },
+        userId,
+      );
+
       return savedOverrides;
     });
   }
@@ -455,6 +496,15 @@ export class FeesService {
           struct.amount,
         );
       }
+
+      await this.emitAutomationEvent(
+        manager,
+        AutomationEventType.FEE_DISCOUNT_CHANGED,
+        schoolId,
+        'StudentFeeOverride',
+        id,
+        { studentIds: [studentId], feeStructureId: override.feeStructureId },
+      );
 
       return true;
     });
@@ -564,6 +614,7 @@ export class FeesService {
 
       let generated = 0;
       let skipped = 0;
+      const generatedStudentIds: string[] = [];
 
       for (const student of students) {
         // Match structures applicable to this student: school-wide (classId null) or student's current class
@@ -648,7 +699,24 @@ export class FeesService {
         }
         await manager.save(StudentInvoiceItem, items);
 
+        generatedStudentIds.push(student.id);
         generated++;
+      }
+
+      if (generatedStudentIds.length > 0) {
+        await this.emitAutomationEvent(
+          manager,
+          AutomationEventType.INVOICE_CHANGED,
+          schoolId,
+          'StudentInvoice',
+          sessionId,
+          {
+            studentIds: generatedStudentIds,
+            sessionId,
+            termId: termId ?? null,
+            generated,
+          },
+        );
       }
 
       return { generated, skipped };
@@ -1846,6 +1914,20 @@ export class FeesService {
       // Generate receipt
       await this.generateReceipt(manager, savedShare.id, schoolId);
 
+      await this.emitAutomationEvent(
+        manager,
+        AutomationEventType.PAYMENT_APPROVED,
+        schoolId,
+        'PaymentSubmissionStudentShare',
+        savedShare.id,
+        {
+          studentIds: [student.id],
+          batchId: savedBatch.id,
+          amount: input.amount,
+        },
+        userId,
+      );
+
       // Re-fetch full share with relations
       const fullShare = await manager.findOne(PaymentSubmissionStudentShare, {
         where: { id: savedShare.id },
@@ -1957,6 +2039,19 @@ export class FeesService {
             }),
           );
         }
+        await this.emitAutomationEvent(
+          manager,
+          AutomationEventType.FEE_ALLOCATION_CHANGED,
+          schoolId,
+          'PaymentSubmissionStudentShare',
+          share.id,
+          {
+            studentIds: [share.studentId],
+            batchId: share.batchId,
+            allocationCount: input.allocations.length,
+          },
+          userId,
+        );
       }
 
       // Finalize the share
@@ -1970,6 +2065,20 @@ export class FeesService {
 
       // Generate receipt
       await this.generateReceipt(manager, share.id, schoolId);
+
+      await this.emitAutomationEvent(
+        manager,
+        AutomationEventType.PAYMENT_APPROVED,
+        schoolId,
+        'PaymentSubmissionStudentShare',
+        share.id,
+        {
+          studentIds: [share.studentId],
+          batchId: share.batchId,
+          amount: share.amount,
+        },
+        userId,
+      );
 
       // Notify parent
       const parent = await manager.findOne(User, {
@@ -2017,6 +2126,20 @@ export class FeesService {
       share.finalizedAt = new Date();
       share.finalizedBy = userId;
       await manager.save(PaymentSubmissionStudentShare, share);
+
+      await this.emitAutomationEvent(
+        manager,
+        AutomationEventType.PAYMENT_REJECTED,
+        schoolId,
+        'PaymentSubmissionStudentShare',
+        share.id,
+        {
+          studentIds: [share.studentId],
+          batchId: share.batchId,
+          reason: input.reason ?? null,
+        },
+        userId,
+      );
 
       // Notify parent
       const parent = await manager.findOne(User, {

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,6 +11,8 @@ import { Term } from './entities/term.entity';
 import { CreateSessionInput } from './dto/create-session.input';
 import { CreateTermInput } from './dto/create-term.input';
 import { TermStatus } from '../common/enums';
+import { AutomationEventType } from '../automation/enums/automation-event.enums';
+import { AutomationOutboxService } from '../automation/services/automation-outbox.service';
 
 export interface ActiveTermResolution {
   term: Term | null;
@@ -23,7 +26,23 @@ export class TermsService {
     private readonly sessionsRepository: Repository<Session>,
     @InjectRepository(Term)
     private readonly termsRepository: Repository<Term>,
+    @Optional() private readonly automationOutbox?: AutomationOutboxService,
   ) {}
+
+  private emitAutomationEvent = async (
+    termId: string,
+    schoolId: string,
+    reason: string,
+  ): Promise<void> => {
+    if (!this.automationOutbox) return;
+    await this.automationOutbox.enqueue(this.termsRepository.manager, {
+      type: AutomationEventType.TERM_CHANGED,
+      schoolId,
+      aggregateType: 'Term',
+      aggregateId: termId,
+      payload: { termId, reason },
+    });
+  };
 
   createSession = (input: CreateSessionInput, schoolId: string) => {
     const session = this.sessionsRepository.create({
@@ -110,7 +129,14 @@ export class TermsService {
             .then(() =>
               this.termsRepository
                 .update({ id: termId, schoolId }, { status: TermStatus.ACTIVE })
-                .then(() => this.findTermById(termId)),
+                .then(async () => {
+                  await this.emitAutomationEvent(
+                    termId,
+                    schoolId,
+                    'term_activated',
+                  );
+                  return this.findTermById(termId);
+                }),
             )
         );
       });
@@ -119,7 +145,10 @@ export class TermsService {
   closeTerm = (termId: string, schoolId: string) => {
     return this.termsRepository
       .update({ id: termId, schoolId }, { status: TermStatus.CLOSED })
-      .then(() => this.findTermById(termId));
+      .then(async () => {
+        await this.emitAutomationEvent(termId, schoolId, 'term_closed');
+        return this.findTermById(termId);
+      });
   };
 
   resolveActiveTermForMetrics = async (
@@ -203,7 +232,10 @@ export class TermsService {
   unlockTerm = (termId: string, schoolId: string) => {
     return this.termsRepository
       .update({ id: termId, schoolId }, { status: TermStatus.ACTIVE })
-      .then(() => this.findTermById(termId));
+      .then(async () => {
+        await this.emitAutomationEvent(termId, schoolId, 'term_unlocked');
+        return this.findTermById(termId);
+      });
   };
 
   updateTotalSchoolDays = (termId: string, days: number, schoolId: string) => {

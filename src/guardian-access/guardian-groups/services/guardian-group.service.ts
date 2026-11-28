@@ -3,10 +3,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { UserRole } from '../../../common/enums';
+import { AutomationEventType } from '../../../automation/enums/automation-event.enums';
+import { AutomationOutboxService } from '../../../automation/services/automation-outbox.service';
 import { PaginationArgs } from '../../../common/pagination';
 import { GuardianAccessAuditLog } from '../../entities/guardian-access-audit-log.entity';
 import { GuardianAuditAction } from '../../enums/guardian-policy.enums';
@@ -43,7 +46,27 @@ export class GuardianGroupService {
     private readonly groupRepo: Repository<GuardianGroup>,
     private readonly membershipService: GuardianGroupMembershipService,
     private readonly auditService: GuardianAccessAuditService,
+    @Optional() private readonly automationOutbox?: AutomationOutboxService,
   ) {}
+
+  private emitAutomationEvent = async (
+    manager: EntityManager,
+    type: AutomationEventType,
+    schoolId: string,
+    groupId: string,
+    actorId: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<void> => {
+    if (!this.automationOutbox) return;
+    await this.automationOutbox.enqueue(manager, {
+      type,
+      schoolId,
+      aggregateType: 'GuardianGroup',
+      aggregateId: groupId,
+      actorId,
+      payload: { groupIds: [groupId], ...metadata },
+    });
+  };
 
   resolveSchoolId = (
     user: GuardianGroupManagementUser,
@@ -157,6 +180,23 @@ export class GuardianGroupService {
       null,
       this.groupSnapshot(saved),
     );
+    await this.emitAutomationEvent(
+      this.groupRepo.manager,
+      AutomationEventType.GUARDIAN_GROUP_CREATED,
+      schoolId,
+      saved.id,
+      user.sub,
+      { isActive: saved.isActive, type: saved.type },
+    );
+    if (saved.type === GuardianGroupType.DYNAMIC && saved.condition) {
+      await this.emitAutomationEvent(
+        this.groupRepo.manager,
+        AutomationEventType.GUARDIAN_GROUP_CONDITION_CHANGED,
+        schoolId,
+        saved.id,
+        user.sub,
+      );
+    }
     return saved;
   };
 
@@ -202,6 +242,28 @@ export class GuardianGroupService {
       before,
       this.groupSnapshot(saved),
     );
+    await this.emitAutomationEvent(
+      this.groupRepo.manager,
+      AutomationEventType.GUARDIAN_GROUP_UPDATED,
+      group.schoolId,
+      saved.id,
+      user.sub,
+      { isActive: saved.isActive, type: saved.type },
+    );
+    if (
+      saved.type === GuardianGroupType.DYNAMIC &&
+      (input.condition !== undefined ||
+        input.clearCondition === true ||
+        input.type !== undefined)
+    ) {
+      await this.emitAutomationEvent(
+        this.groupRepo.manager,
+        AutomationEventType.GUARDIAN_GROUP_CONDITION_CHANGED,
+        group.schoolId,
+        saved.id,
+        user.sub,
+      );
+    }
     return saved;
   };
 
@@ -226,6 +288,15 @@ export class GuardianGroupService {
       before,
       this.groupSnapshot(saved),
     );
+    await this.emitAutomationEvent(
+      this.groupRepo.manager,
+      isActive
+        ? AutomationEventType.GUARDIAN_GROUP_ACTIVATED
+        : AutomationEventType.GUARDIAN_GROUP_DEACTIVATED,
+      group.schoolId,
+      saved.id,
+      user.sub,
+    );
     return saved;
   };
 
@@ -247,6 +318,13 @@ export class GuardianGroupService {
       group.id,
       before,
       this.groupSnapshot(saved),
+    );
+    await this.emitAutomationEvent(
+      this.groupRepo.manager,
+      AutomationEventType.GUARDIAN_GROUP_DEACTIVATED,
+      group.schoolId,
+      saved.id,
+      user.sub,
     );
     return true;
   };
@@ -284,7 +362,20 @@ export class GuardianGroupService {
     this.assertFixed(group);
     const current = await this.membershipService.getActiveStudentIds(group.id);
     const merged = Array.from(new Set([...current, ...input.studentIds]));
-    return this.membershipService.syncFixedMembers(group, merged, user.sub);
+    const preview = await this.membershipService.syncFixedMembers(
+      group,
+      merged,
+      user.sub,
+    );
+    await this.emitAutomationEvent(
+      this.groupRepo.manager,
+      AutomationEventType.GUARDIAN_GROUP_MEMBERS_CHANGED,
+      group.schoolId,
+      group.id,
+      user.sub,
+      { studentIds: input.studentIds, action: 'added' },
+    );
+    return preview;
   };
 
   removeMembers = async (
@@ -295,11 +386,20 @@ export class GuardianGroupService {
     this.assertFixed(group);
     const removed = new Set(input.studentIds);
     const current = await this.membershipService.getActiveStudentIds(group.id);
-    return this.membershipService.syncFixedMembers(
+    const preview = await this.membershipService.syncFixedMembers(
       group,
       current.filter((id) => !removed.has(id)),
       user.sub,
     );
+    await this.emitAutomationEvent(
+      this.groupRepo.manager,
+      AutomationEventType.GUARDIAN_GROUP_MEMBERS_CHANGED,
+      group.schoolId,
+      group.id,
+      user.sub,
+      { studentIds: input.studentIds, action: 'removed' },
+    );
+    return preview;
   };
 
   history = async (

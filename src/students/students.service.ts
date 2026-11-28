@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager } from 'typeorm';
@@ -22,6 +23,8 @@ import { ClassesService } from '../classes/classes.service';
 import { SchoolsService } from '../schools/schools.service';
 import { User } from '../users/entities/user.entity';
 import { MailService } from '../mail/mail.service';
+import { AutomationEventType } from '../automation/enums/automation-event.enums';
+import { AutomationOutboxService } from '../automation/services/automation-outbox.service';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 
@@ -40,7 +43,25 @@ export class StudentsService {
     private readonly classesService: ClassesService,
     private readonly schoolsService: SchoolsService,
     private readonly mailService: MailService,
+    @Optional() private readonly automationOutbox?: AutomationOutboxService,
   ) {}
+
+  private emitAutomationEvent = async (
+    manager: EntityManager,
+    type: AutomationEventType,
+    schoolId: string,
+    aggregateId: string,
+    payload: Record<string, unknown> = {},
+  ): Promise<void> => {
+    if (!this.automationOutbox) return;
+    await this.automationOutbox.enqueue(manager, {
+      type,
+      schoolId,
+      aggregateType: 'Student',
+      aggregateId,
+      payload,
+    });
+  };
 
   private getAdmissionPrefix = (schoolCode: string, year: number) =>
     `STD-${String(year).slice(-2)}-${schoolCode}`;
@@ -128,6 +149,7 @@ export class StudentsService {
   createStudent = (input: CreateStudentInput, schoolId: string) => {
     const admissionYear = new Date().getFullYear();
     const setupEmails: { email: string; resetToken: string }[] = [];
+    const guardianIds: string[] = [];
 
     return this.classesService.getClassById(input.classId, schoolId).then(() =>
       this.getAdmissionContext(schoolId, admissionYear).then(
@@ -218,7 +240,31 @@ export class StudentsService {
                             }),
                           );
                         }
+                        guardianIds.push(parentUser.id);
                       }
+                    }
+                    await this.emitAutomationEvent(
+                      manager,
+                      AutomationEventType.STUDENT_STATUS_CHANGED,
+                      schoolId,
+                      savedStudent.id,
+                      {
+                        studentIds: [savedStudent.id],
+                        status: savedStudent.status,
+                        classId: savedStudent.currentClassId,
+                      },
+                    );
+                    if (guardianIds.length > 0) {
+                      await this.emitAutomationEvent(
+                        manager,
+                        AutomationEventType.GUARDIAN_RELATIONSHIP_ADDED,
+                        schoolId,
+                        savedStudent.id,
+                        {
+                          studentIds: [savedStudent.id],
+                          guardianIds: Array.from(new Set(guardianIds)),
+                        },
+                      );
                     }
                     return savedStudent;
                   });
@@ -378,6 +424,34 @@ export class StudentsService {
             }
             await this.sendParentAccessSetupEmails(setupEmails);
           }
+          const manager = this.studentsRepository.manager;
+          if (input.status !== undefined) {
+            await this.emitAutomationEvent(
+              manager,
+              AutomationEventType.STUDENT_STATUS_CHANGED,
+              schoolId,
+              id,
+              { studentIds: [id], status: input.status },
+            );
+          }
+          if (input.classId !== undefined) {
+            await this.emitAutomationEvent(
+              manager,
+              AutomationEventType.STUDENT_CLASS_CHANGED,
+              schoolId,
+              id,
+              { studentIds: [id], classId: input.classId },
+            );
+          }
+          if (input.guardians !== undefined) {
+            await this.emitAutomationEvent(
+              manager,
+              AutomationEventType.GUARDIAN_RELATIONSHIP_CHANGED,
+              schoolId,
+              id,
+              { studentIds: [id] },
+            );
+          }
           return this.getStudentById(id, schoolId);
         });
     });
@@ -448,7 +522,23 @@ export class StudentsService {
               }),
             );
 
-            return manager.save(Student, studentEntities);
+            return manager
+              .save(Student, studentEntities)
+              .then(async (savedStudents) => {
+                if (savedStudents.length > 0) {
+                  await this.emitAutomationEvent(
+                    manager,
+                    AutomationEventType.STUDENT_STATUS_CHANGED,
+                    schoolId,
+                    schoolId,
+                    {
+                      studentIds: savedStudents.map((student) => student.id),
+                      reason: 'bulk_import',
+                    },
+                  );
+                }
+                return savedStudents;
+              });
           }),
         ),
       )
@@ -475,9 +565,16 @@ export class StudentsService {
           studentId: student.id,
           parentId: parentUser.id,
         });
-        return this.studentParentsRepository
-          .save(record)
-          .then(() => this.getStudentById(studentId, schoolId));
+        return this.studentParentsRepository.save(record).then(async () => {
+          await this.emitAutomationEvent(
+            this.studentParentsRepository.manager,
+            AutomationEventType.GUARDIAN_RELATIONSHIP_ADDED,
+            schoolId,
+            student.id,
+            { studentIds: [student.id], guardianIds: [parentUser.id] },
+          );
+          return this.getStudentById(studentId, schoolId);
+        });
       }),
     );
   };
@@ -500,7 +597,16 @@ export class StudentsService {
             }
             return this.studentParentsRepository
               .remove(record)
-              .then(() => true);
+              .then(async () => {
+                await this.emitAutomationEvent(
+                  this.studentParentsRepository.manager,
+                  AutomationEventType.GUARDIAN_RELATIONSHIP_REMOVED,
+                  schoolId,
+                  studentId,
+                  { studentIds: [studentId], guardianIds: [parentUserId] },
+                );
+                return true;
+              });
           });
       }),
     );
@@ -774,7 +880,20 @@ export class StudentsService {
         if (archiveGraduated) {
           return this.studentsRepository
             .update(ids, { isArchived: true, status: StudentStatus.GRADUATED })
-            .then(() => ({ promoted: 0, archived: students.length }));
+            .then(async () => {
+              await this.emitAutomationEvent(
+                this.studentsRepository.manager,
+                AutomationEventType.STUDENT_STATUS_CHANGED,
+                schoolId,
+                fromClassId,
+                {
+                  studentIds: ids,
+                  status: StudentStatus.GRADUATED,
+                  reason: 'promotion_archive',
+                },
+              );
+              return { promoted: 0, archived: students.length };
+            });
         }
 
         if (!toClassId) {
@@ -785,7 +904,20 @@ export class StudentsService {
 
         return this.studentsRepository
           .update(ids, { currentClassId: toClassId })
-          .then(() => ({ promoted: students.length, archived: 0 }));
+          .then(async () => {
+            await this.emitAutomationEvent(
+              this.studentsRepository.manager,
+              AutomationEventType.STUDENT_CLASS_CHANGED,
+              schoolId,
+              toClassId,
+              {
+                studentIds: ids,
+                fromClassId,
+                toClassId,
+              },
+            );
+            return { promoted: students.length, archived: 0 };
+          });
       });
   };
 

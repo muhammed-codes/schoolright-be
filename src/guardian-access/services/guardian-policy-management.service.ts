@@ -3,10 +3,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { UserRole } from '../../common/enums';
+import { AutomationEventType } from '../../automation/enums/automation-event.enums';
+import { AutomationOutboxService } from '../../automation/services/automation-outbox.service';
 import { GuardianAccessPolicy } from '../entities/guardian-access-policy.entity';
 import { GuardianAccessPolicyRule } from '../entities/guardian-access-policy-rule.entity';
 import {
@@ -42,7 +45,27 @@ export class GuardianPolicyManagementService {
     private readonly ruleRepo: Repository<GuardianAccessPolicyRule>,
     private readonly auditService: GuardianAccessAuditService,
     private readonly conditionValidator: GuardianConditionValidator,
+    @Optional() private readonly automationOutbox?: AutomationOutboxService,
   ) {}
+
+  private emitAutomationEvent = async (
+    manager: EntityManager,
+    type: AutomationEventType,
+    schoolId: string,
+    policyId: string,
+    actorId: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<void> => {
+    if (!this.automationOutbox) return;
+    await this.automationOutbox.enqueue(manager, {
+      type,
+      schoolId,
+      aggregateType: 'GuardianAccessPolicy',
+      aggregateId: policyId,
+      actorId,
+      payload: { policyIds: [policyId], ...metadata },
+    });
+  };
 
   resolveSchoolId = (
     user: GuardianManagementUser,
@@ -125,6 +148,14 @@ export class GuardianPolicyManagementService {
       null,
       this.snapshot(result),
     );
+    await this.emitAutomationEvent(
+      this.policyRepo.manager,
+      AutomationEventType.GUARDIAN_ACCESS_POLICY_CHANGED,
+      schoolId,
+      result.id,
+      user.sub,
+      { enabled: result.enabled },
+    );
     return result;
   };
 
@@ -206,6 +237,14 @@ export class GuardianPolicyManagementService {
       before,
       this.snapshot(result),
     );
+    await this.emitAutomationEvent(
+      this.policyRepo.manager,
+      AutomationEventType.GUARDIAN_ACCESS_POLICY_CHANGED,
+      policy.schoolId,
+      result.id,
+      user.sub,
+      { enabled: result.enabled },
+    );
     return result;
   };
 
@@ -232,6 +271,16 @@ export class GuardianPolicyManagementService {
       before,
       this.snapshot(result),
     );
+    await this.emitAutomationEvent(
+      this.policyRepo.manager,
+      enabled
+        ? AutomationEventType.GUARDIAN_ACCESS_POLICY_CHANGED
+        : AutomationEventType.GUARDIAN_ACCESS_POLICY_DISABLED,
+      policy.schoolId,
+      id,
+      user.sub,
+      { enabled },
+    );
     return result;
   };
 
@@ -252,6 +301,14 @@ export class GuardianPolicyManagementService {
     );
     await this.ruleRepo.delete({ policyId: id });
     await this.policyRepo.delete(id);
+    await this.emitAutomationEvent(
+      this.policyRepo.manager,
+      AutomationEventType.GUARDIAN_ACCESS_POLICY_DISABLED,
+      policy.schoolId,
+      id,
+      user.sub,
+      { deleted: true },
+    );
     return true;
   };
 
