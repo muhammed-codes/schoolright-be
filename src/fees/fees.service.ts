@@ -18,6 +18,7 @@ import { FeeCategory } from './entities/fee-category.entity';
 import { FeeStructure } from './entities/fee-structure.entity';
 import {
   StudentFeeOverride,
+  FeeOverrideApprovalStatus,
   FeeOverrideType,
 } from './entities/student-fee-override.entity';
 import { SchoolBankAccount } from './entities/school-bank-account.entity';
@@ -282,6 +283,7 @@ export class FeesService {
     studentId: string,
     struct: FeeStructure,
     newAmount: number,
+    override?: StudentFeeOverride | null,
   ) {
     const whereCondition: FindOptionsWhere<StudentInvoice> = {
       schoolId,
@@ -303,7 +305,13 @@ export class FeesService {
         (i) => i.feeCategoryId === struct.feeCategoryId,
       );
       if (item) {
+        item.originalAmount = struct.amount;
         item.amount = newAmount;
+        item.overrideId = override?.id ?? null;
+        item.overrideType = override?.type ?? null;
+        item.overrideAmount = override
+          ? Math.max(0, struct.amount - override.overrideAmount)
+          : 0;
         item.balance = Math.max(0, item.amount - item.amountPaid);
         await manager.save(StudentInvoiceItem, item);
 
@@ -355,6 +363,9 @@ export class FeesService {
             override.reason = input.reason ?? null;
             override.type = input.type ?? FeeOverrideType.ADJUSTMENT;
             override.createdBy = userId;
+            override.approvalStatus = FeeOverrideApprovalStatus.APPROVED;
+            override.approvedAt = new Date();
+            override.approvedBy = userId;
           } else {
             override = manager.create(StudentFeeOverride, {
               schoolId,
@@ -364,6 +375,9 @@ export class FeesService {
               reason: input.reason ?? null,
               type: input.type ?? FeeOverrideType.ADJUSTMENT,
               createdBy: userId,
+              approvalStatus: FeeOverrideApprovalStatus.APPROVED,
+              approvedAt: new Date(),
+              approvedBy: userId,
             });
           }
           const saved = await manager.save(StudentFeeOverride, override);
@@ -375,6 +389,7 @@ export class FeesService {
             studentId,
             struct,
             input.overrideAmount,
+            saved,
           );
 
           return saved;
@@ -599,6 +614,12 @@ export class FeesService {
               feeCategoryId: struct.feeCategoryId,
               description: struct.feeCategory?.name || 'Fee',
               amount,
+              originalAmount: struct.amount,
+              overrideId: override?.id ?? null,
+              overrideType: override?.type ?? null,
+              overrideAmount: override
+                ? Math.max(0, struct.amount - override.overrideAmount)
+                : 0,
               amountPaid: 0,
               balance: amount,
             });

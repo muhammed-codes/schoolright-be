@@ -11,6 +11,12 @@ export enum FeeOverrideType {
   ADJUSTMENT = 'ADJUSTMENT',
 }
 
+export enum FeeOverrideApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 registerEnumType(FeeOverrideType, { name: 'FeeOverrideType' });
 
 @ObjectType()
@@ -50,6 +56,19 @@ export class StudentFeeOverride extends BaseEntity {
   @Field(() => String, { nullable: true })
   @Column({ type: 'uuid', nullable: true })
   createdBy!: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: FeeOverrideApprovalStatus,
+    default: FeeOverrideApprovalStatus.PENDING,
+  })
+  approvalStatus!: FeeOverrideApprovalStatus;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt!: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  approvedBy!: string | null;
 
   @Field(() => FeeStructure)
   @ManyToOne(() => FeeStructure, { eager: false })
