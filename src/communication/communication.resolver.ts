@@ -1,4 +1,4 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import {
   ForbiddenException,
   NotFoundException,
@@ -8,9 +8,20 @@ import { CommunicationService } from './communication.service';
 import { filterAnnouncementsForGuardian } from './communication.guardian-filter';
 import { Announcement } from './entities/announcement.entity';
 import {
+  AnnouncementAudiencePreviewInput,
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
 } from './dto/announcement.input';
+import {
+  AnnouncementAudiencePreviewType,
+  AnnouncementDeliveryReportItemType,
+  AnnouncementDeliverySummaryType,
+  AnnouncementReadStateType,
+} from './dto/announcement-targeting-output.dto';
+import {
+  AnnouncementDeliveryChannel,
+  AnnouncementDeliveryStatus,
+} from './enums/announcement-targeting.enums';
 import { CurrentUser, RequirePermission, Roles } from '../common/decorators';
 import { JwtAuthGuard, PermissionGuard, RolesGuard } from '../common/guards';
 import { SCHOOL_STAFF_ROLES } from '../common/constants/roles.constant';
@@ -25,6 +36,9 @@ import {
 } from '../guardian-access/enums/guardian-permission.enums';
 
 const PaginatedAnnouncement = createPaginatedType(Announcement);
+const PaginatedDeliveryReports = createPaginatedType(
+  AnnouncementDeliveryReportItemType,
+);
 
 type AuthUser = { sub: string; schoolId?: string; role: UserRole };
 
@@ -44,9 +58,12 @@ export class CommunicationResolver {
       }
       return requestedSchoolId;
     }
-    if (!user.schoolId) throw new ForbiddenException('A school scope is required');
+    if (!user.schoolId)
+      throw new ForbiddenException('A school scope is required');
     if (requestedSchoolId && requestedSchoolId !== user.schoolId) {
-      throw new ForbiddenException('You can only manage announcements for your school');
+      throw new ForbiddenException(
+        'You can only manage announcements for your school',
+      );
     }
     return user.schoolId;
   }
@@ -67,7 +84,16 @@ export class CommunicationResolver {
         .map((child) => child.classId)
         .filter((id): id is string => Boolean(id)),
     );
-    return filterAnnouncementsForGuardian(announcements, classIds);
+    const targetedAnnouncementIds =
+      await this.communicationService.getTargetedRecipientAnnouncementIds(
+        user.sub,
+        user.schoolId!,
+      );
+    return filterAnnouncementsForGuardian(
+      announcements,
+      classIds,
+      targetedAnnouncementIds,
+    );
   };
 
   @Query(() => Announcement, { nullable: true })
@@ -197,6 +223,105 @@ export class CommunicationResolver {
     return this.communicationService.delete(
       id,
       this.resolveSchoolId(user, schoolId),
+    );
+  }
+
+  @Query(() => AnnouncementAudiencePreviewType)
+  @RequirePermission(AppResource.COMMUNICATION, PermissionAction.MANAGE)
+  previewAnnouncementAudience(
+    @Args('input') input: AnnouncementAudiencePreviewInput,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const schoolId = this.resolveSchoolId(user, input.schoolId);
+    return this.communicationService.previewAudience(input, schoolId);
+  }
+
+  @Query(() => AnnouncementDeliverySummaryType)
+  @RequirePermission(AppResource.COMMUNICATION, PermissionAction.MANAGE)
+  announcementDeliverySummary(
+    @Args('announcementId') announcementId: string,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.communicationService.getDeliverySummary(
+      announcementId,
+      this.resolveSchoolId(user, schoolId),
+    );
+  }
+
+  @Query(() => PaginatedDeliveryReports)
+  @RequirePermission(AppResource.COMMUNICATION, PermissionAction.MANAGE)
+  announcementDeliveryReport(
+    @Args('announcementId') announcementId: string,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
+    @Args('page', { type: () => Int, nullable: true }) page: number | undefined,
+    @Args('limit', { type: () => Int, nullable: true })
+    limit: number | undefined,
+    @Args('status', {
+      type: () => AnnouncementDeliveryStatus,
+      nullable: true,
+    })
+    status: AnnouncementDeliveryStatus | undefined,
+    @Args('channel', {
+      type: () => AnnouncementDeliveryChannel,
+      nullable: true,
+    })
+    channel: AnnouncementDeliveryChannel | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.communicationService.getDeliveryReport(
+      announcementId,
+      this.resolveSchoolId(user, schoolId),
+      { page, limit, status, channel },
+    );
+  }
+
+  @Mutation(() => Int)
+  @RequirePermission(AppResource.COMMUNICATION, PermissionAction.PUBLISH)
+  retryAnnouncementDeliveries(
+    @Args('announcementId') announcementId: string,
+    @Args('schoolId', { type: () => String, nullable: true })
+    schoolId: string | undefined,
+    @Args('deliveryId', { type: () => String, nullable: true })
+    deliveryId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.communicationService.retryDeliveries(
+      announcementId,
+      this.resolveSchoolId(user, schoolId),
+      deliveryId,
+    );
+  }
+
+  @Query(() => AnnouncementReadStateType)
+  @Roles(UserRole.PARENT)
+  @RequirePermission(AppResource.COMMUNICATION, PermissionAction.READ)
+  myAnnouncementReadState(
+    @Args('announcementId') announcementId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    if (!user.schoolId) throw new NotFoundException('Announcement not found');
+    return this.communicationService.getReadState(
+      announcementId,
+      user.sub,
+      user.schoolId,
+    );
+  }
+
+  @Mutation(() => Boolean)
+  @Roles(UserRole.PARENT)
+  @RequirePermission(AppResource.COMMUNICATION, PermissionAction.UPDATE)
+  markAnnouncementRead(
+    @Args('announcementId') announcementId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    if (!user.schoolId) throw new NotFoundException('Announcement not found');
+    return this.communicationService.markRead(
+      announcementId,
+      user.sub,
+      user.schoolId,
     );
   }
 }

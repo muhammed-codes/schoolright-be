@@ -11,16 +11,28 @@ import { StudentParent } from '../students/entities/student-parent.entity';
 import { Student } from '../students/entities/student.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../common/enums';
-import { NotificationsService } from '../notifications/notifications.service';
 import {
   Announcement,
   AnnouncementAudience,
   AnnouncementStatus,
 } from './entities/announcement.entity';
 import {
+  AnnouncementAudiencePreviewInput,
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
 } from './dto/announcement.input';
+import {
+  AnnouncementDeliveryReportItemType,
+  AnnouncementDeliverySummaryType,
+  AnnouncementReadStateType,
+  AnnouncementAudiencePreviewType,
+} from './dto/announcement-targeting-output.dto';
+import {
+  AnnouncementDeliveryChannel,
+  AnnouncementDeliveryStatus,
+} from './enums/announcement-targeting.enums';
+import { AnnouncementAudienceService } from './services/announcement-audience.service';
+import { AnnouncementDeliveryService } from './services/announcement-delivery.service';
 import { PaginationArgs } from '../common/pagination';
 
 @Injectable()
@@ -37,7 +49,8 @@ export class CommunicationService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly accessService: AccessService,
-    private readonly notificationsService: NotificationsService,
+    private readonly audienceService: AnnouncementAudienceService,
+    private readonly deliveryService: AnnouncementDeliveryService,
   ) {}
 
   private async assertClassScope(
@@ -80,10 +93,19 @@ export class CommunicationService {
       .filter((id): id is string => !!id);
   };
 
+  private isTargetedAudience = (audience: AnnouncementAudience) =>
+    [
+      AnnouncementAudience.GUARDIAN_GROUP,
+      AnnouncementAudience.CUSTOM_GUARDIANS,
+      AnnouncementAudience.MANUAL_STUDENTS,
+      AnnouncementAudience.MANUAL_GUARDIANS,
+    ].includes(audience);
+
   private isVisibleTo = (
     announcement: Announcement,
     role: UserRole,
     classIds: string[],
+    targetedAnnouncementIds: Set<string>,
   ) => {
     if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN)
       return true;
@@ -93,7 +115,9 @@ export class CommunicationService {
         announcement.audience === AnnouncementAudience.GUARDIANS ||
         (announcement.audience === AnnouncementAudience.CLASS &&
           !!announcement.targetClassId &&
-          classIds.includes(announcement.targetClassId))
+          classIds.includes(announcement.targetClassId)) ||
+        (this.isTargetedAudience(announcement.audience) &&
+          targetedAnnouncementIds.has(announcement.id))
       );
     }
     return (
@@ -101,6 +125,11 @@ export class CommunicationService {
       announcement.audience === AnnouncementAudience.STAFF
     );
   };
+
+  getTargetedRecipientAnnouncementIds = async (
+    userId: string,
+    schoolId: string,
+  ) => this.deliveryService.getRecipientAnnouncementIds(userId, schoolId);
 
   getVisibleById = async (
     id: string,
@@ -117,7 +146,13 @@ export class CommunicationService {
       role === UserRole.PARENT
         ? await this.getVisibleClassIds(userId, schoolId)
         : [];
-    if (!this.isVisibleTo(announcement, role, classIds))
+    const targetedAnnouncementIds =
+      role === UserRole.PARENT
+        ? await this.getTargetedRecipientAnnouncementIds(userId, schoolId)
+        : new Set<string>();
+    if (
+      !this.isVisibleTo(announcement, role, classIds, targetedAnnouncementIds)
+    )
       throw new NotFoundException('Announcement not found');
     return announcement;
   };
@@ -133,6 +168,7 @@ export class CommunicationService {
       );
     }
     await this.assertClassScope(input.targetClassId, schoolId);
+    await this.audienceService.resolveCreation(input, schoolId);
     return this.announcementRepo.save(
       this.announcementRepo.create({
         schoolId,
@@ -141,8 +177,14 @@ export class CommunicationService {
         body: input.body.trim(),
         audience: input.audience,
         targetClassId: input.targetClassId || null,
+        targetGroupIds: input.targetGroupIds ?? [],
+        audienceCondition: input.audienceCondition ?? null,
+        manualStudentIds: input.manualStudentIds ?? [],
+        manualGuardianIds: input.manualGuardianIds ?? [],
         status: AnnouncementStatus.DRAFT,
         publishedAt: null,
+        audienceSnapshot: null,
+        audienceResolvedAt: null,
       }),
     );
   };
@@ -174,8 +216,12 @@ export class CommunicationService {
       role === UserRole.PARENT
         ? await this.getVisibleClassIds(userId, schoolId)
         : [];
+    const targetedAnnouncementIds =
+      role === UserRole.PARENT
+        ? await this.getTargetedRecipientAnnouncementIds(userId, schoolId)
+        : new Set<string>();
     return announcements.filter((item) =>
-      this.isVisibleTo(item, role, classIds),
+      this.isVisibleTo(item, role, classIds, targetedAnnouncementIds),
     );
   };
 
@@ -223,67 +269,120 @@ export class CommunicationService {
         'Only class announcements may target a class',
       );
     await this.assertClassScope(targetClassId || undefined, schoolId);
+    await this.audienceService.resolveUpdate(existing, input, schoolId);
     await this.announcementRepo.update(id, {
       ...(input.title === undefined ? {} : { title: input.title.trim() }),
       ...(input.body === undefined ? {} : { body: input.body.trim() }),
       audience,
       targetClassId: targetClassId || null,
+      targetGroupIds: input.targetGroupIds ?? existing.targetGroupIds ?? [],
+      audienceCondition:
+        input.audienceCondition === undefined
+          ? existing.audienceCondition
+          : input.audienceCondition,
+      manualStudentIds:
+        input.manualStudentIds ?? existing.manualStudentIds ?? [],
+      manualGuardianIds:
+        input.manualGuardianIds ?? existing.manualGuardianIds ?? [],
     });
     return this.assertAnnouncement(id, schoolId);
   };
 
   publish = async (id: string, schoolId: string) => {
-    const announcement = await this.assertAnnouncement(id, schoolId);
-    if (announcement.status === AnnouncementStatus.PUBLISHED)
-      return announcement;
-    announcement.status = AnnouncementStatus.PUBLISHED;
-    announcement.publishedAt = new Date();
-    const saved = await this.announcementRepo.save(announcement);
-    const data = { announcementId: saved.id, type: 'announcement' };
-    if (saved.audience === AnnouncementAudience.SCHOOL) {
-      void this.notificationsService.notifySchool(
-        schoolId,
-        saved.title,
-        saved.body,
-        data,
-      );
-    } else if (saved.audience === AnnouncementAudience.STAFF) {
-      void this.notificationsService.notifyUsersByRole(
-        schoolId,
-        UserRole.CLASS_TEACHER,
-        saved.title,
-        saved.body,
-      );
-      void this.notificationsService.notifyUsersByRole(
-        schoolId,
-        UserRole.SUBJECT_TEACHER,
-        saved.title,
-        saved.body,
-      );
-    } else if (saved.audience === AnnouncementAudience.GUARDIANS) {
-      void this.notificationsService.notifyUsersByRole(
-        schoolId,
-        UserRole.PARENT,
-        saved.title,
-        saved.body,
-      );
-    } else if (saved.targetClassId) {
-      void this.notificationsService.notifyParentsOfClass(
-        saved.targetClassId,
-        saved.title,
-        saved.body,
-        data,
-      );
-    } else {
-      void this.notificationsService.notifyUsersByRole(
-        schoolId,
-        UserRole.PARENT,
-        saved.title,
-        saved.body,
-      );
+    const existing = await this.assertAnnouncement(id, schoolId);
+    if (existing.status === AnnouncementStatus.PUBLISHED) return existing;
+    const result = await this.announcementRepo.update(
+      { id, schoolId, status: AnnouncementStatus.DRAFT },
+      {
+        status: AnnouncementStatus.PUBLISHED,
+        publishedAt: new Date(),
+      },
+    );
+    if (!result.affected) {
+      const current = await this.assertAnnouncement(id, schoolId);
+      if (current.status === AnnouncementStatus.PUBLISHED) return current;
+      throw new NotFoundException('Announcement not found');
     }
-    return saved;
+    const saved = await this.assertAnnouncement(id, schoolId);
+    const resolved = await this.audienceService.resolveInput(
+      {
+        audience: saved.audience,
+        schoolId,
+        ...(saved.targetClassId ? { targetClassId: saved.targetClassId } : {}),
+        ...(saved.targetGroupIds?.length
+          ? { targetGroupIds: saved.targetGroupIds }
+          : {}),
+        ...(saved.audienceCondition
+          ? { audienceCondition: saved.audienceCondition }
+          : {}),
+        ...(saved.manualStudentIds?.length
+          ? { manualStudentIds: saved.manualStudentIds }
+          : {}),
+        ...(saved.manualGuardianIds?.length
+          ? { manualGuardianIds: saved.manualGuardianIds }
+          : {}),
+      },
+      schoolId,
+    );
+    await this.announcementRepo.update(id, {
+      audienceSnapshot: resolved.snapshot as Record<string, any>,
+      audienceResolvedAt: new Date(),
+    });
+    await this.deliveryService.createRecipients(saved, schoolId, resolved);
+    this.deliveryService.queueProcessing(id);
+    return this.assertAnnouncement(id, schoolId);
   };
+
+  previewAudience = async (
+    input: AnnouncementAudiencePreviewInput,
+    schoolId: string,
+  ): Promise<AnnouncementAudiencePreviewType> => {
+    const resolved = await this.audienceService.resolveInput(input, schoolId);
+    return resolved.preview;
+  };
+
+  getDeliverySummary = async (
+    announcementId: string,
+    schoolId: string,
+  ): Promise<AnnouncementDeliverySummaryType> =>
+    this.deliveryService.getSummary(announcementId, schoolId);
+
+  getDeliveryReport = async (
+    announcementId: string,
+    schoolId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      status?: AnnouncementDeliveryStatus;
+      channel?: AnnouncementDeliveryChannel;
+    },
+  ): Promise<{
+    items: AnnouncementDeliveryReportItemType[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> => this.deliveryService.getReport(announcementId, schoolId, options);
+
+  retryDeliveries = async (
+    announcementId: string,
+    schoolId: string,
+    deliveryId?: string,
+  ): Promise<number> =>
+    this.deliveryService.retryFailed(announcementId, schoolId, deliveryId);
+
+  markRead = async (
+    announcementId: string,
+    userId: string,
+    schoolId: string,
+  ): Promise<boolean> =>
+    this.deliveryService.markRead(announcementId, userId, schoolId);
+
+  getReadState = async (
+    announcementId: string,
+    userId: string,
+    schoolId: string,
+  ): Promise<AnnouncementReadStateType> =>
+    this.deliveryService.getReadState(announcementId, userId, schoolId);
 
   delete = async (id: string, schoolId: string) => {
     const announcement = await this.assertAnnouncement(id, schoolId);

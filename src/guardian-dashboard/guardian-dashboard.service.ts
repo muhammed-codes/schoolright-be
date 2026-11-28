@@ -228,9 +228,16 @@ export class GuardianDashboardService {
     if (student.currentClassId) {
       selectedClassIds.add(student.currentClassId);
     }
+    const targetedAnnouncementIds = isAllowed(GuardianResource.COMMUNICATION)
+      ? await this.communicationService.getTargetedRecipientAnnouncementIds(
+          guardian.id,
+          schoolId,
+        )
+      : new Set<string>();
     const authorizedAnnouncements = filterAnnouncementsForGuardian(
       visibleAnnouncements ?? [],
       selectedClassIds,
+      targetedAnnouncementIds,
     );
     const announcements = authorizedAnnouncements
       .slice(0, 3)

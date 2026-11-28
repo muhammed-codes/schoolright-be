@@ -158,6 +158,9 @@ const build = () => {
   };
   const communicationService = {
     listVisible: jest.fn().mockResolvedValue([]),
+    getTargetedRecipientAnnouncementIds: jest
+      .fn()
+      .mockResolvedValue(new Set<string>()),
   };
   const feesService = {
     getParentSubmissions: jest.fn().mockResolvedValue([]),
@@ -550,6 +553,30 @@ describe('guardian dashboard service', () => {
       'own-class',
     ]);
     expect(deps.enforcement.getAllowedChildren).not.toHaveBeenCalled();
+  });
+
+  it('includes targeted announcements only for recipient guardians', async () => {
+    const deps = build();
+    deps.communicationService.listVisible.mockResolvedValue([
+      {
+        ...announcement('targeted', new Date(NOW.getTime() - DAY)),
+        audience: AnnouncementAudience.GUARDIAN_GROUP,
+      },
+    ]);
+    deps.communicationService.getTargetedRecipientAnnouncementIds.mockResolvedValue(
+      new Set(['targeted']),
+    );
+
+    const dashboard = await deps.service.getDashboard(
+      USER,
+      'student-a',
+      undefined,
+      NOW,
+    );
+
+    expect(dashboard.announcements.map((item) => item.id)).toEqual([
+      'targeted',
+    ]);
   });
 
   it('uses the school timezone for today and period status', async () => {

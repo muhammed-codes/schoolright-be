@@ -7,6 +7,12 @@ import { Student } from '../students/entities/student.entity';
 import { StudentParent } from '../students/entities/student-parent.entity';
 import { UserRole } from '../common/enums';
 
+export interface AnnouncementPushResult {
+  status: 'SENT' | 'FAILED';
+  failureReason?: string;
+  sentAt: Date | null;
+}
+
 @Injectable()
 export class NotificationsService {
   private expo = new Expo();
@@ -174,6 +180,43 @@ export class NotificationsService {
           `Failed to notify user ${userId}: ${this.getErrorMessage(error)}`,
         );
       });
+  };
+
+  deliverAnnouncementPush = async (
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ): Promise<AnnouncementPushResult> => {
+    try {
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      if (
+        !user ||
+        !user.expoPushToken ||
+        !Expo.isExpoPushToken(user.expoPushToken)
+      ) {
+        return {
+          status: 'FAILED',
+          failureReason: 'No valid Expo push token',
+          sentAt: null,
+        };
+      }
+      const message: ExpoPushMessage = {
+        to: user.expoPushToken,
+        sound: 'default',
+        title,
+        body,
+        data,
+      };
+      await this.expo.sendPushNotificationsAsync([message]);
+      return { status: 'SENT', sentAt: new Date() };
+    } catch (error) {
+      return {
+        status: 'FAILED',
+        failureReason: this.getErrorMessage(error),
+        sentAt: null,
+      };
+    }
   };
 
   notifyUsersByRole = (

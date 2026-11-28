@@ -1,7 +1,3 @@
-# ------------------------------------------------------
-# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
-# ------------------------------------------------------
-
 input AdminSetTeacherAvailabilityInput {
   approvalStatus: ApprovalStatus! = APPROVED
   dayOfWeek: Int!
@@ -13,22 +9,117 @@ input AdminSetTeacherAvailabilityInput {
 
 type Announcement {
   audience: AnnouncementAudience!
+  audienceCondition: JSONObject
+  audienceResolvedAt: DateTime
+  audienceSnapshot: JSONObject
   body: String!
   createdAt: DateTime!
   createdById: String!
   id: ID!
+  manualGuardianIds: [String!]
+  manualStudentIds: [String!]
   publishedAt: DateTime
   schoolId: String!
   status: AnnouncementStatus!
   targetClassId: String
+  targetGroupIds: [String!]
   title: String!
   updatedAt: DateTime!
 }
 
 enum AnnouncementAudience {
   CLASS
+  CUSTOM_GUARDIANS
   GUARDIANS
+  GUARDIAN_GROUP
+  MANUAL_GUARDIANS
+  MANUAL_STUDENTS
   SCHOOL
+  STAFF
+}
+
+type AnnouncementAudienceGuardianType {
+  email: String
+  guardianId: String!
+  guardianName: String!
+  qualifyingStudentIds: [String!]!
+  sources: [String!]!
+}
+
+input AnnouncementAudiencePreviewInput {
+  audience: AnnouncementAudience!
+  audienceCondition: JSONObject
+  manualGuardianIds: [String!]
+  manualStudentIds: [String!]
+  schoolId: String
+  targetClassId: String
+  targetGroupIds: [String!]
+}
+
+type AnnouncementAudiencePreviewType {
+  breakdown: JSONObject!
+  excludedCount: Int!
+  generatedAt: DateTime!
+  guardians: [AnnouncementAudienceGuardianType!]!
+  qualifiedStudentCount: Int!
+  selectedGroups: JSONObject!
+  unevaluableCount: Int!
+  uniqueGuardianCount: Int!
+  warnings: [String!]!
+}
+
+enum AnnouncementDeliveryChannel {
+  EXPO_PUSH
+}
+
+type AnnouncementDeliveryReportItemType {
+  announcementId: String!
+  attemptCount: Int!
+  audienceSources: JSONObject!
+  channel: AnnouncementDeliveryChannel!
+  createdAt: DateTime!
+  deliveredAt: DateTime
+  failureReason: String
+  id: String!
+  lastAttemptAt: DateTime
+  qualifyingStudentIds: [String!]!
+  readAt: DateTime
+  recipientEmail: String
+  recipientKind: AnnouncementRecipientKind!
+  recipientName: String
+  sentAt: DateTime
+  status: AnnouncementDeliveryStatus!
+  userId: String!
+}
+
+enum AnnouncementDeliveryStatus {
+  DELIVERED
+  FAILED
+  PENDING
+  PROCESSING
+  READ
+  SENT
+}
+
+type AnnouncementDeliverySummaryType {
+  delivered: Int!
+  failed: Int!
+  pending: Int!
+  processing: Int!
+  read: Int!
+  sent: Int!
+  successful: Int!
+  total: Int!
+}
+
+type AnnouncementReadStateType {
+  announcementId: String!
+  isRead: Boolean!
+  readAt: DateTime
+}
+
+enum AnnouncementRecipientKind {
+  PARENT
   STAFF
 }
 
@@ -406,9 +497,13 @@ input CopyDayLayoutInput {
 
 input CreateAnnouncementInput {
   audience: AnnouncementAudience!
+  audienceCondition: JSONObject
   body: String!
+  manualGuardianIds: [String!]
+  manualStudentIds: [String!]
   schoolId: String
   targetClassId: String
+  targetGroupIds: [String!]
   title: String!
 }
 
@@ -1985,6 +2080,7 @@ type Mutation {
   login(input: LoginInput!): AuthResponse!
   logout: Boolean!
   manualStaffAttendance(input: ManualStaffAttendanceInput!): StaffAttendance!
+  markAnnouncementRead(announcementId: String!): Boolean!
   markAttendanceWithQr(token: String!): StaffAttendance!
   markRecurringExpenseRecorded(id: ID!): RecurringExpense!
   markStudentAttendance(input: MarkAttendanceInput!): [StudentAttendance!]!
@@ -2008,6 +2104,7 @@ type Mutation {
   replenishPettyCash(input: ReplenishPettyCashInput!): PettyCashTransaction!
   resendVerificationEmail(email: String!): Boolean!
   resetPassword(input: ResetPasswordInput!): Boolean!
+  retryAnnouncementDeliveries(announcementId: String!, deliveryId: String, schoolId: String): Int!
   returnResult(reason: String!, resultSheetId: String!): ResultSheet!
   reviewTeacherAvailability(input: ReviewTeacherAvailabilityInput!): TeacherAvailability!
   saveClassTeacherRemark(remark: String!, studentResultId: String!): StudentResult!
@@ -2119,6 +2216,14 @@ enum NonTeachingSlotType {
 type PaginatedAnnouncement {
   hasMore: Boolean
   items: [Announcement!]!
+  page: Int!
+  total: Int!
+  totalPages: Int!
+}
+
+type PaginatedAnnouncementDeliveryReportItemType {
+  hasMore: Boolean
+  items: [AnnouncementDeliveryReportItemType!]!
   page: Int!
   total: Int!
   totalPages: Int!
@@ -2453,6 +2558,8 @@ type Query {
   allFeeCategories: [FeeCategory!]!
   allRolePermissions: [RolePermission!]!
   announcement(id: String!): Announcement
+  announcementDeliveryReport(announcementId: String!, channel: AnnouncementDeliveryChannel, limit: Int, page: Int, schoolId: String, status: AnnouncementDeliveryStatus): PaginatedAnnouncementDeliveryReportItemType!
+  announcementDeliverySummary(announcementId: String!, schoolId: String): AnnouncementDeliverySummaryType!
   announcements: [Announcement!]!
   announcementsPage(limit: Int! = 50, page: Int! = 1): PaginatedAnnouncement!
   approvalConfigs: [FeeApprovalConfig!]!
@@ -2529,6 +2636,7 @@ type Query {
   invoices(filter: InvoiceFilterInput, limit: Int! = 50, page: Int! = 1): PaginatedStudentInvoice!
   marketingLandingPage: String!
   me: User!
+  myAnnouncementReadState(announcementId: String!): AnnouncementReadStateType!
   myAvailabilities: [TeacherAvailability!]!
   myChildResults(studentId: String!): [StudentResult!]!
   myChildren: [Student!]!
@@ -2555,6 +2663,7 @@ type Query {
   pettyCashAccount: PettyCashAccount!
   pettyCashTransactions(limit: Int = 50): [PettyCashTransaction!]!
   platformStats: PlatformStats!
+  previewAnnouncementAudience(input: AnnouncementAudiencePreviewInput!): AnnouncementAudiencePreviewType!
   previewGuardianAccess(action: GuardianAction!, condition: JSONObject, guardianId: String!, resource: GuardianResource!, rules: [GuardianPolicyRuleInput!], schoolId: String, studentId: String!): GuardianPreviewType!
   previewGuardianGroup(input: GuardianGroupDraftInput!, schoolId: String): GuardianGroupPreviewType!
 
@@ -3518,8 +3627,12 @@ type TimetablePdfResult {
 
 input UpdateAnnouncementInput {
   audience: AnnouncementAudience
+  audienceCondition: JSONObject
   body: String
+  manualGuardianIds: [String!]
+  manualStudentIds: [String!]
   targetClassId: String
+  targetGroupIds: [String!]
   title: String
 }
 

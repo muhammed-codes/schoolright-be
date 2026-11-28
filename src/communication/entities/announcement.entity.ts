@@ -1,12 +1,17 @@
 import { ObjectType, Field, registerEnumType } from '@nestjs/graphql';
 import { Column, Entity, Index } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { GraphQLJSONObject } from '../../common/scalars/json-object.scalar';
 
 export enum AnnouncementAudience {
   SCHOOL = 'school',
   STAFF = 'staff',
   GUARDIANS = 'guardians',
   CLASS = 'class',
+  GUARDIAN_GROUP = 'guardian_group',
+  CUSTOM_GUARDIANS = 'custom_guardians',
+  MANUAL_STUDENTS = 'manual_students',
+  MANUAL_GUARDIANS = 'manual_guardians',
 }
 
 export enum AnnouncementStatus {
@@ -56,4 +61,28 @@ export class Announcement extends BaseEntity {
   @Field(() => Date, { nullable: true })
   @Column({ type: 'timestamp', nullable: true })
   publishedAt!: Date | null;
+
+  @Field(() => [String], { nullable: true })
+  @Column({ type: 'uuid', array: true, nullable: true, default: '{}' })
+  targetGroupIds!: string[];
+
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  audienceCondition!: Record<string, any> | null;
+
+  @Field(() => [String], { nullable: true })
+  @Column({ type: 'uuid', array: true, nullable: true, default: '{}' })
+  manualStudentIds!: string[];
+
+  @Field(() => [String], { nullable: true })
+  @Column({ type: 'uuid', array: true, nullable: true, default: '{}' })
+  manualGuardianIds!: string[];
+
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  audienceSnapshot!: Record<string, any> | null;
+
+  @Field(() => Date, { nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
+  audienceResolvedAt!: Date | null;
 }

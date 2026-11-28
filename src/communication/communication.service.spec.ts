@@ -1,9 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await */
 
 import { ForbiddenException } from '@nestjs/common';
-jest.mock('../notifications/notifications.service', () => ({
-  NotificationsService: class NotificationsService {},
-}));
 import { CommunicationService } from './communication.service';
 import {
   AnnouncementAudience,
@@ -25,10 +22,13 @@ describe('CommunicationService audience boundaries', () => {
     const studentParentRepo = { find: jest.fn() };
     const studentRepo = { find: jest.fn() };
     const userRepo = { find: jest.fn() };
-    const notificationsService = {
-      notifySchool: jest.fn(),
-      notifyUsersByRole: jest.fn(),
-      notifyParentsOfClass: jest.fn(),
+    const audienceService = {
+      resolveCreation: jest.fn(),
+      resolveUpdate: jest.fn(),
+      resolveInput: jest.fn(),
+    };
+    const deliveryService = {
+      getRecipientAnnouncementIds: jest.fn().mockResolvedValue(new Set()),
     };
 
     return {
@@ -39,7 +39,8 @@ describe('CommunicationService audience boundaries', () => {
         studentRepo as any,
         userRepo as any,
         {} as any,
-        notificationsService as any,
+        audienceService as any,
+        deliveryService as any,
       ),
       announcementRepo,
       classRepo,
@@ -144,6 +145,14 @@ describe('CommunicationService announcement detail visibility', () => {
     const studentParentRepo = { find: jest.fn().mockResolvedValue([]) };
     const studentRepo = { find: jest.fn().mockResolvedValue([]) };
     const userRepo = { find: jest.fn() };
+    const audienceService = {
+      resolveCreation: jest.fn(),
+      resolveUpdate: jest.fn(),
+      resolveInput: jest.fn(),
+    };
+    const deliveryService = {
+      getRecipientAnnouncementIds: jest.fn().mockResolvedValue(new Set()),
+    };
     const service = new CommunicationService(
       announcementRepo as any,
       classRepo as any,
@@ -151,11 +160,8 @@ describe('CommunicationService announcement detail visibility', () => {
       studentRepo as any,
       userRepo as any,
       {} as any,
-      {
-        notifySchool: jest.fn(),
-        notifyUsersByRole: jest.fn(),
-        notifyParentsOfClass: jest.fn(),
-      } as any,
+      audienceService as any,
+      deliveryService as any,
     );
     return {
       service,
