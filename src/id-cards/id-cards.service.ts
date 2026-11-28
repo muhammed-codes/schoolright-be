@@ -871,6 +871,7 @@ export class IdCardsService implements OnModuleInit {
     const fullHtml = compileFullDocumentHtml(
       cardsHtml,
       `${student.firstName} ${student.lastName} - Student ID Card`,
+      templateDef.orientation,
     );
 
     return {
@@ -959,6 +960,7 @@ export class IdCardsService implements OnModuleInit {
     const fullHtml = compileFullDocumentHtml(
       cardsHtml,
       `${staff.firstName} ${staff.lastName} - Staff ID Card`,
+      templateDef.orientation,
     );
 
     return {
@@ -1140,6 +1142,7 @@ export class IdCardsService implements OnModuleInit {
     const fullHtml = compileFullDocumentHtml(
       cardsHtml,
       `Batch Student ID Cards (${students.length})`,
+      templateDef.orientation,
     );
 
     return {
@@ -1246,6 +1249,7 @@ export class IdCardsService implements OnModuleInit {
     const fullHtml = compileFullDocumentHtml(
       cardsHtml,
       `Batch Staff ID Cards (${staffList.length})`,
+      templateDef.orientation,
     );
 
     return {

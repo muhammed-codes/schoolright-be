@@ -144,7 +144,10 @@ export const getDefaultTemplateKey = (cardType: IdCardType): string => {
 export const compileFullDocumentHtml = (
   cardsHtml: string[],
   title = 'ID Cards',
+  orientation: IdCardOrientation = IdCardOrientation.PORTRAIT,
 ): string => {
+  const widthMm = orientation === IdCardOrientation.LANDSCAPE ? 85.6 : 53.98;
+  const heightMm = orientation === IdCardOrientation.LANDSCAPE ? 53.98 : 85.6;
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -154,6 +157,14 @@ export const compileFullDocumentHtml = (
   <title>${title}</title>
   <style>
     ${BASE_CARD_CSS}
+    .id-card-wrapper {
+      width: ${widthMm}mm;
+      height: ${heightMm}mm;
+      min-width: ${widthMm}mm;
+      min-height: ${heightMm}mm;
+      max-width: ${widthMm}mm;
+      max-height: ${heightMm}mm;
+    }
   </style>
 </head>
 <body>
