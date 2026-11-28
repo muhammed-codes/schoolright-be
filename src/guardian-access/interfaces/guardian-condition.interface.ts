@@ -4,14 +4,26 @@ import {
   GuardianConditionNodeType,
   GuardianConditionOperator,
 } from '../enums/guardian-condition.enums';
+import type {
+  GuardianFeeAmountBasis,
+  GuardianFeeCategorySelectionMode,
+  GuardianFeeMetric,
+} from './guardian-fee-facts.interface';
 
 export type GuardianConditionValue = string | number | Array<string | number>;
+
+export interface GuardianFeeConditionConfig {
+  selectionMode: GuardianFeeCategorySelectionMode;
+  categoryIds: string[];
+  amountBasis: GuardianFeeAmountBasis;
+}
 
 export interface GuardianConditionLeaf {
   type: GuardianConditionNodeType.CONDITION;
   field: GuardianConditionField;
   operator: GuardianConditionOperator;
   value: GuardianConditionValue;
+  fee?: GuardianFeeConditionConfig;
 }
 
 export interface GuardianConditionGroup {
@@ -28,6 +40,7 @@ export interface GuardianConditionDetail {
   field: GuardianConditionField | null;
   operator: GuardianConditionOperator | null;
   value: GuardianConditionValue | null;
+  fee?: GuardianFeeConditionConfig;
   matched: boolean;
   reason?: string;
 }
@@ -43,6 +56,7 @@ export interface GuardianStudentMetrics {
   studentStatus: string;
   feePaymentPercentage?: number;
   outstandingBalance?: number;
+  feeMetrics?: Record<string, GuardianFeeMetric>;
   unavailable: {
     feePaymentPercentage?: string;
     outstandingBalance?: string;

@@ -23,11 +23,32 @@ import {
 import { GuardianFeeMetricScope } from '../enums/guardian-condition.enums';
 import {
   GuardianEvaluateInput,
+  GuardianPolicyCandidate,
   GuardianPolicyDecision,
 } from '../interfaces/guardian-decision.interface';
-import { GuardianStudentMetrics } from '../interfaces/guardian-condition.interface';
+import {
+  GuardianConditionGroup,
+  GuardianFeeConditionConfig,
+  GuardianStudentMetrics,
+} from '../interfaces/guardian-condition.interface';
+import { GuardianFeeMetric } from '../interfaces/guardian-fee-facts.interface';
+import {
+  DEFAULT_GUARDIAN_FEE_METRIC_KEY,
+  collectGuardianFeeConditionConfigs,
+  emptyGuardianFeeMetric,
+} from '../interfaces/guardian-fee-condition.util';
 import { GuardianAccessEvaluator } from './guardian-access-evaluator.service';
+import { GuardianConditionValidator } from './guardian-condition-validator.service';
 import { GuardianFeeMetricService } from './guardian-fee-metric.service';
+
+export interface GuardianPreviewDraft {
+  condition?: unknown;
+  rules: Array<{
+    resource: GuardianResource;
+    action: GuardianAction;
+    effect: GuardianEffect;
+  }>;
+}
 
 @Injectable()
 export class GuardianEnforcementService {
@@ -44,6 +65,7 @@ export class GuardianEnforcementService {
     private readonly exceptionRepo: Repository<GuardianAccessException>,
     private readonly evaluator: GuardianAccessEvaluator,
     private readonly feeMetricService: GuardianFeeMetricService,
+    private readonly conditionValidator: GuardianConditionValidator,
   ) {}
 
   getDecision = async (
@@ -58,11 +80,19 @@ export class GuardianEnforcementService {
     const linked = await this.studentParentRepo.findOne({
       where: { studentId, parentId: guardianId },
     });
-    const [policies, exceptions, metrics] = await Promise.all([
+    const [policies, exceptions] = await Promise.all([
       this.loadSchoolPolicies(schoolId),
       this.exceptionRepo.find({ where: { schoolId, studentId } }),
-      this.buildMetrics(student, schoolId),
     ]);
+    const feeMetricsByStudent = await this.buildFeeMetricsForStudents(
+      [student.id],
+      schoolId,
+      policies,
+    );
+    const metrics = this.buildMetrics(
+      student,
+      feeMetricsByStudent[student.id] ?? {},
+    );
     const input: GuardianEvaluateInput = {
       user: { sub: guardianId, role: UserRole.PARENT, schoolId },
       studentId: student.id,
@@ -145,9 +175,21 @@ export class GuardianEnforcementService {
         (student) =>
           student && !student.isArchived && student.schoolId === schoolId,
       );
+    const policies = await this.loadSchoolPolicies(schoolId);
+    const feeMetricsByStudent = await this.buildFeeMetricsForStudents(
+      students.map((student) => student.id),
+      schoolId,
+      policies,
+    );
     const snapshots = await Promise.all(
       students.map((student) =>
-        this.snapshotForStudent(student, guardianId, schoolId),
+        this.snapshotForStudent(
+          student,
+          guardianId,
+          schoolId,
+          policies,
+          feeMetricsByStudent[student.id] ?? {},
+        ),
       ),
     );
     return snapshots;
@@ -159,6 +201,7 @@ export class GuardianEnforcementService {
     studentId: string,
     resource: GuardianResource,
     action: GuardianAction,
+    draft?: GuardianPreviewDraft,
   ) => {
     const guardian = await this.userRepo.findOne({ where: { id: guardianId } });
     if (!guardian || guardian.schoolId !== adminSchoolId) {
@@ -167,15 +210,63 @@ export class GuardianEnforcementService {
     if (guardian.role !== UserRole.PARENT) {
       throw new ForbiddenException('The selected user is not a parent');
     }
-    const decision = await this.getDecision(
-      guardianId,
+    const [student, policies, exceptions] = await Promise.all([
+      this.loadStudent(studentId, adminSchoolId),
+      this.loadSchoolPolicies(adminSchoolId),
+      this.exceptionRepo.find({
+        where: { schoolId: adminSchoolId, studentId },
+      }),
+    ]);
+    const draftCondition = draft?.condition
+      ? this.conditionValidator.validate(draft.condition)
+      : null;
+    const draftPolicy: GuardianPolicyCandidate | null = draftCondition
+      ? {
+          id: 'DRAFT_POLICY',
+          schoolId: adminSchoolId,
+          name: 'Draft policy',
+          scope: GuardianPolicyScope.DYNAMIC_SEGMENT,
+          enabled: true,
+          priority: Number.MAX_SAFE_INTEGER,
+          condition: draftCondition,
+          studentId: null,
+          rules: (draft?.rules ?? []).map((rule, index) => ({
+            ...rule,
+            id: `DRAFT_RULE_${index}`,
+          })),
+        }
+      : null;
+    const evaluationPolicies = draftPolicy
+      ? [...policies, draftPolicy]
+      : policies;
+    const feeMetricsByStudent = await this.buildFeeMetricsForStudents(
+      [student.id],
       adminSchoolId,
-      studentId,
+      policies,
+      draftCondition ? [draftCondition] : [],
+    );
+    const metrics = this.buildMetrics(
+      student,
+      feeMetricsByStudent[student.id] ?? {},
+    );
+    const linked = await this.studentParentRepo.findOne({
+      where: { studentId, parentId: guardianId },
+    });
+    const decision = this.evaluator.evaluate({
+      user: {
+        sub: guardianId,
+        role: UserRole.PARENT,
+        schoolId: adminSchoolId,
+      },
+      studentId: student.id,
+      studentSchoolId: student.schoolId,
+      guardianLinked: Boolean(linked),
       resource,
       action,
-    );
-    const student = await this.loadStudent(studentId, adminSchoolId);
-    const metrics = await this.buildMetrics(student, adminSchoolId);
+      policies: evaluationPolicies,
+      exceptions,
+      metrics,
+    });
     return { decision, metrics };
   };
 
@@ -183,12 +274,13 @@ export class GuardianEnforcementService {
     student: Student,
     guardianId: string,
     schoolId: string,
+    policies: GuardianAccessPolicy[],
+    feeMetrics: Record<string, GuardianFeeMetric>,
   ) => {
-    const metrics = await this.buildMetrics(student, schoolId);
-    const [policies, exceptions] = await Promise.all([
-      this.loadSchoolPolicies(schoolId),
-      this.exceptionRepo.find({ where: { schoolId, studentId: student.id } }),
-    ]);
+    const metrics = this.buildMetrics(student, feeMetrics);
+    const exceptions = await this.exceptionRepo.find({
+      where: { schoolId, studentId: student.id },
+    });
     const permissions = Object.values(GuardianResource).flatMap((resource) =>
       Object.values(GuardianAction).map((action) => {
         const decision = this.evaluator.evaluate({
@@ -227,25 +319,68 @@ export class GuardianEnforcementService {
     };
   };
 
-  private buildMetrics = async (
-    student: Student,
+  private buildFeeMetricsForStudents = async (
+    studentIds: string[],
     schoolId: string,
-  ): Promise<GuardianStudentMetrics> => {
-    const fee = await this.feeMetricService.calculateForStudent(
-      student.id,
-      schoolId,
-      GuardianFeeMetricScope.ACTIVE_TERM_AND_SESSION_INVOICES,
+    policies: GuardianAccessPolicy[],
+    extraConditions: GuardianConditionGroup[] = [],
+  ): Promise<Record<string, Record<string, GuardianFeeMetric>>> => {
+    const configs = new Map<string, GuardianFeeConditionConfig>();
+    policies.forEach((policy) => {
+      collectGuardianFeeConditionConfigs(policy.condition).forEach(
+        (config, key) => configs.set(key, config),
+      );
+    });
+    extraConditions.forEach((condition) => {
+      collectGuardianFeeConditionConfigs(condition).forEach((config, key) =>
+        configs.set(key, config),
+      );
+    });
+    const results = await Promise.all(
+      Array.from(configs.entries()).map(async ([key, config]) => {
+        const feeResults = await this.feeMetricService.calculateForStudents({
+          schoolId,
+          studentIds,
+          scope: GuardianFeeMetricScope.ACTIVE_TERM_AND_SESSION_INVOICES,
+          feeSelectionMode: config.selectionMode,
+          feeCategoryIds: config.categoryIds,
+          amountBasis: config.amountBasis,
+        });
+        return { key, feeResults };
+      }),
     );
+    return studentIds.reduce<Record<string, Record<string, GuardianFeeMetric>>>(
+      (byStudent, studentId) => {
+        byStudent[studentId] = results.reduce<
+          Record<string, GuardianFeeMetric>
+        >((byKey, result) => {
+          const metric = result.feeResults.get(studentId);
+          if (metric) byKey[result.key] = metric;
+          return byKey;
+        }, {});
+        return byStudent;
+      },
+      {},
+    );
+  };
+
+  private buildMetrics = (
+    student: Student,
+    feeMetrics?: Record<string, GuardianFeeMetric>,
+  ): GuardianStudentMetrics => {
+    const defaultFee =
+      feeMetrics?.[DEFAULT_GUARDIAN_FEE_METRIC_KEY] ?? emptyGuardianFeeMetric();
     return {
       studentClassId: student.currentClassId ?? null,
       studentStatus: student.status,
-      ...(fee.feePaymentPercentage === undefined
+      ...(defaultFee.feePaymentPercentage === undefined
         ? {}
-        : { feePaymentPercentage: fee.feePaymentPercentage }),
-      ...(fee.outstandingBalance === undefined
+        : { feePaymentPercentage: defaultFee.feePaymentPercentage }),
+      ...(defaultFee.outstandingBalance === undefined
         ? {}
-        : { outstandingBalance: fee.outstandingBalance }),
-      unavailable: fee.unavailable,
+        : { outstandingBalance: defaultFee.outstandingBalance }),
+      ...(feeMetrics ? { feeMetrics } : {}),
+      unavailable: defaultFee.unavailable,
     };
   };
 

@@ -7,7 +7,10 @@ import {
   GuardianAction,
   GuardianResource,
 } from '../enums/guardian-permission.enums';
-import { GuardianEnforcementService } from './guardian-enforcement.service';
+import {
+  GuardianEnforcementService,
+  GuardianPreviewDraft,
+} from './guardian-enforcement.service';
 
 @Injectable()
 export class GuardianPolicyPreviewService {
@@ -21,6 +24,7 @@ export class GuardianPolicyPreviewService {
     studentId: string,
     resource: GuardianResource,
     action: GuardianAction,
+    draft?: GuardianPreviewDraft,
   ) => {
     const result = await this.enforcementService.preview(
       schoolId,
@@ -28,6 +32,7 @@ export class GuardianPolicyPreviewService {
       studentId,
       resource,
       action,
+      draft,
     );
     return {
       decision: result.decision,
@@ -59,6 +64,7 @@ export class GuardianPolicyPreviewService {
     studentStatus: metrics.studentStatus,
     feePaymentPercentage: metrics.feePaymentPercentage ?? null,
     outstandingBalance: metrics.outstandingBalance ?? null,
+    feeMetrics: metrics.feeMetrics ?? {},
     unavailable: metrics.unavailable,
   });
 }

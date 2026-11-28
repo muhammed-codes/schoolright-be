@@ -40,6 +40,9 @@ export class GuardianConditionDetailType {
   @Field(() => GraphQLJSONObject, { nullable: true })
   value?: Record<string, unknown> | string | number | null;
 
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  fee?: Record<string, unknown>;
+
   @Field()
   matched!: boolean;
 

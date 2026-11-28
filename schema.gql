@@ -1393,6 +1393,7 @@ enum GuardianAuditAction {
 }
 
 type GuardianConditionDetailType {
+  fee: JSONObject
   field: GuardianConditionField
   matched: Boolean!
   operator: GuardianConditionOperator
@@ -1407,7 +1408,15 @@ type GuardianConditionEvaluationType {
 }
 
 enum GuardianConditionField {
+  FEE_EVALUATION_STATUS
+  FEE_GROSS_AMOUNT
+  FEE_NET_PAYABLE_AMOUNT
+  FEE_OUTSTANDING_BALANCE
+  FEE_PAID_AMOUNT
   FEE_PAYMENT_PERCENTAGE
+  FEE_SETTLED_AMOUNT
+  FEE_SETTLED_PERCENTAGE
+  FEE_TOTAL_AMOUNT
   OUTSTANDING_BALANCE
   STUDENT_CLASS
   STUDENT_STATUS
@@ -2415,7 +2424,7 @@ type Query {
   pettyCashAccount: PettyCashAccount!
   pettyCashTransactions(limit: Int = 50): [PettyCashTransaction!]!
   platformStats: PlatformStats!
-  previewGuardianAccess(action: GuardianAction!, guardianId: String!, resource: GuardianResource!, schoolId: String, studentId: String!): GuardianPreviewType!
+  previewGuardianAccess(action: GuardianAction!, condition: JSONObject, guardianId: String!, resource: GuardianResource!, rules: [GuardianPolicyRuleInput!], schoolId: String, studentId: String!): GuardianPreviewType!
 
   """Preview an ID card template design with sample data"""
   previewIdCardHtml(input: PreviewIdCardInput!): IdCardRenderResult!

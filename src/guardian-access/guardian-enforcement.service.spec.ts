@@ -34,12 +34,30 @@ describe('guardian enforcement service', () => {
     const exceptionRepo = {
       find: jest.fn().mockResolvedValue([]),
     } as unknown as Repository<GuardianAccessException>;
+    const metric = {
+      grossAmount: 1000,
+      netPayableAmount: 1000,
+      discountAmount: 0,
+      scholarshipAmount: 0,
+      waiverAmount: 0,
+      adjustmentAmount: 0,
+      nonCashSettledAmount: 0,
+      approvedPaymentAmount: 500,
+      settledAmount: 500,
+      cashOutstandingBalance: 500,
+      obligationOutstandingBalance: 500,
+      overpaymentAmount: 0,
+      feePaymentPercentage: 50,
+      outstandingBalance: 1000,
+      unavailable: {},
+    };
     const feeMetricService = {
-      calculateForStudent: jest.fn().mockResolvedValue({
-        feePaymentPercentage: 50,
-        outstandingBalance: 1000,
-        unavailable: {},
-      }),
+      calculateForStudents: jest
+        .fn()
+        .mockImplementation(
+          (request: { studentIds: string[] }) =>
+            new Map(request.studentIds.map((id) => [id, metric])),
+        ),
     } as unknown as GuardianFeeMetricService;
     const evaluator = new GuardianAccessEvaluator(
       new GuardianConditionEvaluator(),
@@ -53,6 +71,7 @@ describe('guardian enforcement service', () => {
       exceptionRepo,
       evaluator,
       feeMetricService,
+      new GuardianConditionValidator(),
     );
     return { service, userRepo };
   };

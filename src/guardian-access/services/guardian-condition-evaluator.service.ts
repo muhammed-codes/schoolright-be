@@ -14,6 +14,14 @@ import {
   GuardianConditionValue,
   GuardianStudentMetrics,
 } from '../interfaces/guardian-condition.interface';
+import { GuardianFeeMetric } from '../interfaces/guardian-fee-facts.interface';
+import {
+  DEFAULT_GUARDIAN_FEE_METRIC_KEY,
+  guardianFeeConfigForLeaf,
+  guardianFeeMetricKey,
+  isHardUnavailableFeeMetric,
+  legacyGuardianFeeMetric,
+} from '../interfaces/guardian-fee-condition.util';
 
 @Injectable()
 export class GuardianConditionEvaluator {
@@ -61,7 +69,10 @@ export class GuardianConditionEvaluator {
     leaf: GuardianConditionLeaf,
     metrics: GuardianStudentMetrics,
   ): GuardianConditionEvaluation => {
-    const actualValue = this.resolveFieldValue(leaf.field, metrics);
+    const feeConfig = this.isFeeField(leaf.field)
+      ? guardianFeeConfigForLeaf(leaf)
+      : undefined;
+    const actualValue = this.resolveFieldValue(leaf, metrics);
     const detail = (
       matched: boolean,
       reason?: string,
@@ -69,6 +80,7 @@ export class GuardianConditionEvaluator {
       field: leaf.field,
       operator: leaf.operator,
       value: leaf.value,
+      ...(feeConfig ? { fee: feeConfig } : {}),
       matched,
       ...(reason ? { reason } : {}),
     });
@@ -87,34 +99,110 @@ export class GuardianConditionEvaluator {
     };
   };
 
+  private isFeeField = (field: GuardianConditionField): boolean =>
+    field !== GuardianConditionField.STUDENT_CLASS &&
+    field !== GuardianConditionField.STUDENT_STATUS;
+
   private resolveFieldValue = (
-    field: GuardianConditionField,
+    leaf: GuardianConditionLeaf,
     metrics: GuardianStudentMetrics,
   ): { value?: string | number | null; unavailableReason?: string } => {
-    switch (field) {
+    switch (leaf.field) {
       case GuardianConditionField.STUDENT_CLASS:
         return { value: metrics.studentClassId ?? null };
       case GuardianConditionField.STUDENT_STATUS:
         return { value: metrics.studentStatus };
-      case GuardianConditionField.FEE_PAYMENT_PERCENTAGE:
-        return metrics.feePaymentPercentage === undefined
-          ? {
-              unavailableReason:
-                metrics.unavailable.feePaymentPercentage ??
-                'Fee payment percentage is unavailable',
-            }
-          : { value: metrics.feePaymentPercentage };
-      case GuardianConditionField.OUTSTANDING_BALANCE:
-        return metrics.outstandingBalance === undefined
-          ? {
-              unavailableReason:
-                metrics.unavailable.outstandingBalance ??
-                'Outstanding balance is unavailable',
-            }
-          : { value: metrics.outstandingBalance };
       default:
-        return { unavailableReason: 'Unsupported condition field' };
+        return this.resolveFeeFieldValue(leaf, metrics);
     }
+  };
+
+  private resolveFeeFieldValue = (
+    leaf: GuardianConditionLeaf,
+    metrics: GuardianStudentMetrics,
+  ): { value?: string | number | null; unavailableReason?: string } => {
+    const config = guardianFeeConfigForLeaf(leaf);
+    const key = guardianFeeMetricKey(config);
+    const metric =
+      metrics.feeMetrics?.[key] ??
+      (key === DEFAULT_GUARDIAN_FEE_METRIC_KEY
+        ? legacyGuardianFeeMetric(metrics)
+        : undefined);
+    if (!metric) {
+      return {
+        unavailableReason: `Fee condition was not evaluated for ${key}`,
+      };
+    }
+    if (isHardUnavailableFeeMetric(metric)) {
+      return {
+        unavailableReason:
+          metric.reasons?.[0] ?? 'Fee information is unavailable',
+      };
+    }
+    const value = this.readFeeField(leaf.field, metric);
+    if (value === undefined) {
+      return {
+        unavailableReason: this.resolveFeeUnavailableReason(leaf.field, metric),
+      };
+    }
+    return { value };
+  };
+
+  private readFeeField = (
+    field: GuardianConditionField,
+    metric: GuardianFeeMetric,
+  ): string | number | undefined => {
+    switch (field) {
+      case GuardianConditionField.FEE_PAYMENT_PERCENTAGE:
+        return metric.feePaymentPercentage;
+      case GuardianConditionField.FEE_SETTLED_PERCENTAGE:
+        return metric.settledObligationPercentage;
+      case GuardianConditionField.OUTSTANDING_BALANCE:
+      case GuardianConditionField.FEE_OUTSTANDING_BALANCE:
+        return metric.outstandingBalance;
+      case GuardianConditionField.FEE_PAID_AMOUNT:
+        return metric.approvedPaymentAmount;
+      case GuardianConditionField.FEE_TOTAL_AMOUNT:
+        return metric.totalAmount ?? metric.netPayableAmount;
+      case GuardianConditionField.FEE_NET_PAYABLE_AMOUNT:
+        return metric.netPayableAmount;
+      case GuardianConditionField.FEE_GROSS_AMOUNT:
+        return metric.grossAmount;
+      case GuardianConditionField.FEE_SETTLED_AMOUNT:
+        return metric.settledAmount;
+      case GuardianConditionField.FEE_EVALUATION_STATUS:
+        return metric.evaluationStatus;
+      default:
+        return undefined;
+    }
+  };
+
+  private resolveFeeUnavailableReason = (
+    field: GuardianConditionField,
+    metric: GuardianFeeMetric,
+  ): string => {
+    if (
+      field === GuardianConditionField.FEE_PAYMENT_PERCENTAGE ||
+      field === GuardianConditionField.FEE_SETTLED_PERCENTAGE
+    ) {
+      return (
+        (field === GuardianConditionField.FEE_SETTLED_PERCENTAGE
+          ? metric.unavailable.settledObligationPercentage
+          : (metric.unavailable.feePaymentPercentage ??
+            metric.unavailable.actualPaymentPercentage)) ??
+        'Fee percentage is unavailable'
+      );
+    }
+    if (
+      field === GuardianConditionField.OUTSTANDING_BALANCE ||
+      field === GuardianConditionField.FEE_OUTSTANDING_BALANCE
+    ) {
+      return (
+        metric.unavailable.outstandingBalance ??
+        'Outstanding balance is unavailable'
+      );
+    }
+    return metric.reasons?.[0] ?? 'Fee information is unavailable';
   };
 
   private compare = (

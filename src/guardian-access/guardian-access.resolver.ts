@@ -1,6 +1,7 @@
 import { ForbiddenException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UserRole } from '../common/enums';
+import { GraphQLJSONObject } from '../common/scalars/json-object.scalar';
 import { CurrentUser } from '../common/decorators';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -15,6 +16,7 @@ import {
 } from './dto/guardian-exception.input';
 import {
   CreateGuardianPolicyInput,
+  GuardianPolicyRuleInput,
   UpdateGuardianPolicyInput,
   UpdateGuardianPolicyRuleInput,
 } from './dto/guardian-policy.input';
@@ -206,6 +208,10 @@ export class GuardianAccessResolver {
     @Args('action', { type: () => GuardianAction }) action: GuardianAction,
     @CurrentUser() user: ManagementUser,
     @Args('schoolId', { type: () => String, nullable: true }) schoolId?: string,
+    @Args('condition', { type: () => GraphQLJSONObject, nullable: true })
+    condition?: Record<string, unknown>,
+    @Args('rules', { type: () => [GuardianPolicyRuleInput], nullable: true })
+    rules?: GuardianPolicyRuleInput[],
   ) {
     const resolvedSchoolId = this.policyService.resolveSchoolId(user, schoolId);
     return this.previewService.preview(
@@ -214,6 +220,7 @@ export class GuardianAccessResolver {
       studentId,
       resource,
       action,
+      condition ? { condition, rules: rules ?? [] } : undefined,
     );
   }
 

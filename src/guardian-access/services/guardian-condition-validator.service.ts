@@ -7,10 +7,20 @@ import {
   GuardianConditionOperator,
 } from '../enums/guardian-condition.enums';
 import {
+  GuardianFeeAmountBasis,
+  GuardianFeeCategorySelectionMode,
+  GuardianFeeEvaluationStatus,
+} from '../interfaces/guardian-fee-facts.interface';
+import {
+  defaultAmountBasisForField,
+  normalizeGuardianFeeConditionConfig,
+} from '../interfaces/guardian-fee-condition.util';
+import {
   GuardianConditionGroup,
   GuardianConditionLeaf,
   GuardianConditionNode,
   GuardianConditionValue,
+  GuardianFeeConditionConfig,
 } from '../interfaces/guardian-condition.interface';
 
 export const MAX_CONDITION_DEPTH = 4;
@@ -24,9 +34,29 @@ const STRING_FIELDS = new Set([
   GuardianConditionField.STUDENT_STATUS,
 ]);
 
+const STATUS_FIELDS = new Set([GuardianConditionField.FEE_EVALUATION_STATUS]);
+
+const PERCENTAGE_FIELDS = new Set([
+  GuardianConditionField.FEE_PAYMENT_PERCENTAGE,
+  GuardianConditionField.FEE_SETTLED_PERCENTAGE,
+]);
+
 const NUMERIC_FIELDS = new Set([
   GuardianConditionField.FEE_PAYMENT_PERCENTAGE,
   GuardianConditionField.OUTSTANDING_BALANCE,
+  GuardianConditionField.FEE_SETTLED_PERCENTAGE,
+  GuardianConditionField.FEE_PAID_AMOUNT,
+  GuardianConditionField.FEE_OUTSTANDING_BALANCE,
+  GuardianConditionField.FEE_TOTAL_AMOUNT,
+  GuardianConditionField.FEE_NET_PAYABLE_AMOUNT,
+  GuardianConditionField.FEE_GROSS_AMOUNT,
+  GuardianConditionField.FEE_SETTLED_AMOUNT,
+]);
+
+const FEE_FIELDS = new Set([
+  ...PERCENTAGE_FIELDS,
+  ...NUMERIC_FIELDS,
+  ...STATUS_FIELDS,
 ]);
 
 const MEMBERSHIP_OPERATORS = new Set([
@@ -124,11 +154,13 @@ export class GuardianConditionValidator {
     const typedField = field as GuardianConditionField;
     const typedOperator = operator as GuardianConditionOperator;
     const value = this.validateValue(typedField, typedOperator, node.value);
+    const fee = this.validateFeeConfig(typedField, node.fee);
     return {
       type: GuardianConditionNodeType.CONDITION,
       field: typedField,
       operator: typedOperator,
       value,
+      ...(fee ? { fee } : {}),
     };
   };
 
@@ -147,11 +179,27 @@ export class GuardianConditionValidator {
       if (rawValue < 0) {
         throw new BadRequestException('The value cannot be negative');
       }
-      if (
-        field === GuardianConditionField.FEE_PAYMENT_PERCENTAGE &&
-        rawValue > 100
-      ) {
+      if (PERCENTAGE_FIELDS.has(field) && rawValue > 100) {
         throw new BadRequestException('A percentage cannot exceed 100');
+      }
+      return rawValue;
+    }
+    if (STATUS_FIELDS.has(field)) {
+      if (
+        operator !== GuardianConditionOperator.EQUALS &&
+        operator !== GuardianConditionOperator.NOT_EQUALS
+      ) {
+        throw new BadRequestException('Unsupported operator for this field');
+      }
+      if (
+        typeof rawValue !== 'string' ||
+        !Object.values(GuardianFeeEvaluationStatus).includes(
+          rawValue as GuardianFeeEvaluationStatus,
+        )
+      ) {
+        throw new BadRequestException(
+          'A valid fee evaluation status is required',
+        );
       }
       return rawValue;
     }
@@ -174,6 +222,82 @@ export class GuardianConditionValidator {
       return this.validateStringValue(field, rawValue);
     }
     throw new BadRequestException('Unsupported condition field');
+  };
+
+  private validateFeeConfig = (
+    field: GuardianConditionField,
+    rawValue: unknown,
+  ): GuardianFeeConditionConfig | undefined => {
+    if (rawValue === undefined || rawValue === null) return undefined;
+    if (!FEE_FIELDS.has(field)) {
+      throw new BadRequestException(
+        'Fee settings are not valid for this field',
+      );
+    }
+    if (typeof rawValue !== 'object' || Array.isArray(rawValue)) {
+      throw new BadRequestException('Invalid fee condition settings');
+    }
+    const config = rawValue as Record<string, unknown>;
+    const selectionMode = (config.selectionMode ??
+      GuardianFeeCategorySelectionMode.ALL) as GuardianFeeCategorySelectionMode;
+    if (
+      typeof selectionMode !== 'string' ||
+      !Object.values(GuardianFeeCategorySelectionMode).includes(selectionMode)
+    ) {
+      throw new BadRequestException('Invalid fee selection mode');
+    }
+    const amountBasis = config.amountBasis ?? defaultAmountBasisForField(field);
+    if (
+      typeof amountBasis !== 'string' ||
+      !Object.values(GuardianFeeAmountBasis).includes(
+        amountBasis as GuardianFeeAmountBasis,
+      )
+    ) {
+      throw new BadRequestException('Invalid fee amount basis');
+    }
+    const rawCategoryIds = config.categoryIds ?? [];
+    if (!Array.isArray(rawCategoryIds)) {
+      throw new BadRequestException('Invalid fee category selection');
+    }
+    const categoryIds = Array.from(
+      new Set(
+        rawCategoryIds
+          .filter(
+            (id): id is string => typeof id === 'string' && Boolean(id.trim()),
+          )
+          .map((id) => id.trim()),
+      ),
+    );
+    if (
+      selectionMode === GuardianFeeCategorySelectionMode.ALL &&
+      categoryIds.length > 0
+    ) {
+      throw new BadRequestException(
+        'All fee categories must not include selected category IDs',
+      );
+    }
+    if (
+      selectionMode !== GuardianFeeCategorySelectionMode.ALL &&
+      categoryIds.length === 0
+    ) {
+      throw new BadRequestException('Select at least one fee category');
+    }
+    if (
+      selectionMode === GuardianFeeCategorySelectionMode.INDIVIDUAL &&
+      categoryIds.length !== 1
+    ) {
+      throw new BadRequestException(
+        'An individual fee category condition requires exactly one category',
+      );
+    }
+    return normalizeGuardianFeeConditionConfig(
+      {
+        selectionMode: selectionMode,
+        categoryIds,
+        amountBasis: amountBasis as GuardianFeeAmountBasis,
+      },
+      amountBasis as GuardianFeeAmountBasis,
+    );
   };
 
   private validateStringValue = (
